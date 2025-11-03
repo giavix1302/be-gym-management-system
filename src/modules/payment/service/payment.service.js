@@ -25,6 +25,7 @@ import { bookingService } from '~/modules/booking/service/booking.service'
 import { classEnrollmentModel } from '~/modules/classEnrollment/model/classEnrollment.model'
 import { classEnrollmentService } from '~/modules/classEnrollment/service/classEnrollment.service'
 import { classSessionModel } from '~/modules/classSession/model/classSession.model'
+import { userModel } from '~/modules/user/model/user.model'
 
 const createPaymentVnpay = async (params) => {
   try {
@@ -192,6 +193,7 @@ const vnpReturn = async (query) => {
       const { userId, membershipId } = subscriptionInfo
       const membershipInfo = await membershipModel.getDetailById(membershipId)
       const { durationMonth } = membershipInfo
+      const userInfo = await userModel.getDetailById(userId)
 
       // create payment: userId, price, refId, paymentType, method, description
       const dataToSave = {
@@ -212,16 +214,19 @@ const vnpReturn = async (query) => {
         endDate: calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth),
         status: SUBSCRIPTION_STATUS.ACTIVE,
         paymentStatus: PAYMENT_STATUS.PAID,
-        remainingSessions: countRemainingDays(
-          calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth)
-        ),
+        remainingSessions: countRemainingDays(calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth)),
       }
 
       await subscriptionModel.updateInfoWhenPaymentSuccess(subId, dataUpdateSub)
 
       await deleteLinkPaymentTemp(vnp_TxnRef)
 
-      const baseUrl = `${env.FE_URL}/user/payment/success?`
+      let baseUrl
+      if (userInfo?.role === 'user') {
+        baseUrl = `${env.FE_URL}/user/payment/success?`
+      } else {
+        baseUrl = `${env.FE_URL}/pt/payment/success?`
+      }
 
       const redirectUrl = createRedirectUrl(verify, baseUrl, 'vnpay')
 
@@ -309,7 +314,6 @@ const vnpReturn = async (query) => {
       })
       // delete redis
       await deleteLinkPaymentTemp(vnp_TxnRef)
-
       const baseUrl = `${env.FE_URL}/user/payment/success?`
 
       const redirectUrl = createRedirectUrl(verify, baseUrl, 'vnpay')

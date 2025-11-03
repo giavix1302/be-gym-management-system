@@ -567,10 +567,7 @@ const getHistoryBookingsByUserId = async (userId) => {
             status: {
               $cond: {
                 if: {
-                  $or: [
-                    { $eq: ['$status', BOOKING_STATUS.BOOKING] },
-                    { $eq: ['$status', BOOKING_STATUS.PENDING] },
-                  ],
+                  $or: [{ $eq: ['$status', BOOKING_STATUS.BOOKING] }, { $eq: ['$status', BOOKING_STATUS.PENDING] }],
                 },
                 then: BOOKING_STATUS.COMPLETED,
                 else: '$status',
@@ -622,8 +619,7 @@ const getHistoryBookingsByUserId = async (userId) => {
     const bookingsToUpdate = result
       .filter(
         (booking) =>
-          booking.originalStatus === BOOKING_STATUS.BOOKING ||
-          booking.originalStatus === BOOKING_STATUS.PENDING
+          booking.originalStatus === BOOKING_STATUS.BOOKING || booking.originalStatus === BOOKING_STATUS.PENDING
       )
       .map((booking) => booking.bookingId)
 
@@ -828,19 +824,166 @@ const getBookingsByTrainerId = async (trainerId) => {
   }
 }
 
+// Lấy các booking sắp tới trong khoảng thời gian nhất định để gửi reminder
+const getUpcomingBookingsForReminder = async (minutesBefore) => {
+  try {
+    const now = new Date()
+    const reminderTime = new Date(now.getTime() + minutesBefore * 60 * 1000)
+
+    // Lấy booking có startTime trong khoảng từ now đến reminderTime
+    const upcomingBookings = await GET_DB()
+      .collection(BOOKING_COLLECTION_NAME)
+      .aggregate([
+        // Match bookings với status BOOKING và trong khoảng thời gian reminder
+        {
+          $match: {
+            status: BOOKING_STATUS.BOOKING,
+            _destroy: false,
+          },
+        },
+        // Join với schedules để lấy startTime
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        // Filter theo thời gian
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, now] },
+                { $lte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, reminderTime] },
+              ],
+            },
+          },
+        },
+        // Join với trainers để lấy trainer info
+        {
+          $lookup: {
+            from: 'trainers',
+            localField: 'schedule.trainerId',
+            foreignField: '_id',
+            as: 'trainer',
+          },
+        },
+        {
+          $unwind: '$trainer',
+        },
+        // Join với users để lấy trainer user info
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'trainer.userId',
+            foreignField: '_id',
+            as: 'trainerUser',
+          },
+        },
+        {
+          $unwind: '$trainerUser',
+        },
+        // Join với users để lấy booking user info
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'bookingUser',
+          },
+        },
+        {
+          $unwind: '$bookingUser',
+        },
+        // Join với locations để lấy location info
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Project final structure
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            status: 1,
+            price: 1,
+            note: 1,
+            userId: 1,
+            scheduleId: 1,
+            locationId: 1,
+            schedule: {
+              _id: '$schedule._id',
+              startTime: '$schedule.startTime',
+              endTime: '$schedule.endTime',
+              trainerId: '$schedule.trainerId',
+            },
+            trainer: {
+              _id: '$trainer._id',
+              userId: '$trainer.userId',
+              specialization: '$trainer.specialization',
+              pricePerSession: '$trainer.pricePerSession',
+            },
+            trainerUser: {
+              _id: '$trainerUser._id',
+              fullName: '$trainerUser.fullName',
+              phone: '$trainerUser.phone',
+              avatar: '$trainerUser.avatar',
+            },
+            bookingUser: {
+              _id: '$bookingUser._id',
+              fullName: '$bookingUser.fullName',
+              phone: '$bookingUser.phone',
+              avatar: '$bookingUser.avatar',
+            },
+            location: {
+              _id: '$location._id',
+              name: '$location.name',
+              address: '$location.address',
+            },
+          },
+        },
+        // Sort by startTime
+        {
+          $sort: {
+            'schedule.startTime': 1,
+          },
+        },
+      ])
+      .toArray()
+
+    return upcomingBookings
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Export thêm method mới
 export const bookingModel = {
   BOOKING_COLLECTION_NAME,
   BOOKING_COLLECTION_SCHEMA,
+  validateBeforeCreate,
   createNew,
   getDetailById,
   getBookingsByUserId,
-  getAllBookings,
   getUpcomingBookingsByUserId,
-  getUpcomingBookingsByUserIdSimple,
   getHistoryBookingsByUserId,
-  checkUserBookingConflict,
+  getAllBookings,
   updateInfo,
   deleteBooking,
   softDeleteBooking,
+  checkUserBookingConflict,
   getBookingsByTrainerId,
+  getUpcomingBookingsForReminder, // Method mới
 }

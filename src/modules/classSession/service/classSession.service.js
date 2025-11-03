@@ -1,4 +1,5 @@
 import { classSessionModel } from '../model/classSession.model'
+import { notificationService } from '~/modules/notification/service/notification.service'
 
 const addClassSession = async (req) => {
   try {
@@ -49,19 +50,10 @@ const updateClassSession = async (req) => {
 
     const updateData = {
       ...req.body,
-
       updatedAt: Date.now(),
     }
-    // update PT (kitrem tra khoản thời gian này pt có bị conflict không)
 
-    // update room and schedule (kt xem khoảng time của lớp đó có conflict không)
-
-    // update schedule (kt xem khoảng time của lớp đó có conflict không)
-
-    // update room ( kt xem khoảng time của lớp đó có conflict không)
-
-    // check schedule conflict room
-
+    // Check trainer conflicts if trainers are being updated
     const arrTrainers = Array.isArray(updateData.trainers) ? updateData.trainers : []
 
     if (arrTrainers.length > 0) {
@@ -102,8 +94,8 @@ const updateClassSession = async (req) => {
       }
     }
 
+    // Check room conflicts if room is being updated
     if (updateData.roomId) {
-      //
       const conflictRoom = await classSessionModel.checkRoomScheduleConflict(
         sessionId,
         updateData.startTime,
@@ -143,11 +135,59 @@ const updateClassSession = async (req) => {
 
 const deleteClassSession = async (sessionId) => {
   try {
-    const result = await classSessionModel.deleteMembership(sessionId)
+    // Xóa notifications liên quan trước khi delete class session
+    await notificationService.deleteNotificationsByReference(sessionId, 'CLASS')
+
+    const result = await classSessionModel.deleteClassSession(sessionId)
 
     return {
       success: result === 1,
-      message: result === 1 ? 'Delete done!' : 'Delete failed!',
+      message: result === 1 ? 'Class session and related notifications deleted successfully!' : 'Delete failed!',
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const softDeleteClassSession = async (sessionId) => {
+  try {
+    // Xóa notifications liên quan trước khi soft delete
+    await notificationService.deleteNotificationsByReference(sessionId, 'CLASS')
+
+    const result = await classSessionModel.softDelete(sessionId)
+
+    return {
+      success: result !== null,
+      message:
+        result !== null
+          ? 'Class session soft deleted and related notifications removed successfully!'
+          : 'Soft delete failed!',
+      session: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Method để remove user khỏi class session (khi user cancel enrollment)
+const removeUserFromClassSession = async (userId, classId) => {
+  try {
+    // Xóa notifications liên quan cho user này trong class này
+    const upcomingClassSessions = await classSessionModel.getSessionsByClass(classId)
+
+    for (const session of upcomingClassSessions) {
+      if (session.users && session.users.includes(userId)) {
+        await notificationService.deleteNotificationsByReference(session._id.toString(), 'CLASS')
+      }
+    }
+
+    // Remove user từ tất cả upcoming class sessions
+    const result = await classSessionModel.removeUserFromClassSessions(userId, classId)
+
+    return {
+      success: true,
+      message: 'User removed from class sessions and related notifications deleted',
+      result,
     }
   } catch (error) {
     throw new Error(error)
@@ -159,4 +199,6 @@ export const classSessionService = {
   getListClassSession,
   updateClassSession,
   deleteClassSession,
+  softDeleteClassSession,
+  removeUserFromClassSession, // Method mới
 }

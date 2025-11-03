@@ -9,6 +9,7 @@ import { trainerService } from '~/modules/trainer/service/trainer.service'
 import { STATUS_TYPE } from '~/utils/constants'
 import { cloudinary } from '~/config/cloudinary.config'
 import QRCode from 'qrcode'
+import { staffModel } from '~/modules/staff/model/staff.model'
 
 const login = async (reqBody) => {
   try {
@@ -94,6 +95,23 @@ const login = async (reqBody) => {
         trainer: {
           ...trainerInfo.trainer,
         },
+        accessToken,
+        refreshToken, // controller sẽ set cookie
+      }
+    }
+
+    if (account.role === 'staff') {
+      // lấy thông tin staff
+      const staff = await staffModel.getDetailByUserId(account._id)
+
+      const { locationInfo, userInfo, ...staffInfo } = staff
+
+      return {
+        success: true,
+        message: 'Signed in successfully.',
+        user: sanitize(account),
+        staffInfo, // chỉ dữ liệu staff (id, position, rate,...)
+        locationInfo,
         accessToken,
         refreshToken, // controller sẽ set cookie
       }

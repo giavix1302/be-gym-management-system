@@ -64,11 +64,7 @@ const updateInfo = async (locationId, updateData) => {
   try {
     const updatedLocation = await GET_DB()
       .collection(LOCATION_COLLECTION_NAME)
-      .findOneAndUpdate(
-        { _id: new ObjectId(String(locationId)) },
-        { $set: updateData },
-        { returnDocument: 'after' }
-      )
+      .findOneAndUpdate({ _id: new ObjectId(String(locationId)) }, { $set: updateData }, { returnDocument: 'after' })
     return updatedLocation
   } catch (error) {
     throw new Error(error)
@@ -86,12 +82,22 @@ const deleteLocation = async (locationId) => {
   }
 }
 
+const getActiveLocations = async () => {
+  try {
+    const activeLocations = await GET_DB().collection(LOCATION_COLLECTION_NAME).find({ _destroy: false }).toArray()
+    return activeLocations
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const locationModel = {
   LOCATION_COLLECTION_NAME,
   LOCATION_COLLECTION_SCHEMA,
   createNew,
   getDetailById,
   getListLocation,
+  getActiveLocations,
   updateInfo,
   deleteLocation,
 }

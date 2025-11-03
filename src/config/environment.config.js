@@ -30,4 +30,7 @@ export const env = {
 
   FE_URL: process.env.FE_URL,
   BE_URL: process.env.BE_URL,
+
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL_NAME: process.env.GEMINI_MODEL_NAME,
 }

@@ -9,12 +9,7 @@ const TRAINER_COLLECTION_SCHEMA = Joi.object({
   userId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
 
   specialization: Joi.string()
-    .valid(
-      SPECIALIZATION_TYPE.GYM,
-      SPECIALIZATION_TYPE.BOXING,
-      SPECIALIZATION_TYPE.YOGA,
-      SPECIALIZATION_TYPE.DANCE
-    )
+    .valid(SPECIALIZATION_TYPE.GYM, SPECIALIZATION_TYPE.BOXING, SPECIALIZATION_TYPE.YOGA, SPECIALIZATION_TYPE.DANCE)
     .default(''),
   bio: Joi.string().trim().default(''),
 
@@ -616,11 +611,7 @@ const updateInfo = async (trainerId, updateData) => {
   try {
     const updated = await GET_DB()
       .collection(TRAINER_COLLECTION_NAME)
-      .findOneAndUpdate(
-        { _id: new ObjectId(String(trainerId)) },
-        { $set: updateData },
-        { returnDocument: 'after' }
-      )
+      .findOneAndUpdate({ _id: new ObjectId(String(trainerId)) }, { $set: updateData }, { returnDocument: 'after' })
     return updated
   } catch (error) {
     throw new Error(error)

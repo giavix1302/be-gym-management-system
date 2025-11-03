@@ -1,34 +1,35 @@
 import { equipmentModel } from '../model/equipment.model'
-// Import location model based on your project structure
-// import { locationModel } from '~/modules/location/model/location.model'
 import { EQUIPMENT_STATUS } from '~/utils/constants.js'
 import { sanitize } from '~/utils/utils'
 
-const createEquipment = async (data) => {
+const createEquipment = async (req) => {
   try {
-    const { locationId, name, brand, price, status, purchaseDate, maintenanceHistory } = data
+    // Handle image upload
+    const image = req.file
+    const { muscleCategories, ...rest } = req.body
 
-    // Validate location exists (uncomment when location model is available)
-    // const isLocationExist = await locationModel.getDetailById(locationId)
-    // console.log('🚀 ~ createEquipment ~ isLocationExist:', isLocationExist)
-    // if (isLocationExist === null) return { success: false, message: 'Location not found' }
-
-    const dataToSave = {
-      locationId,
-      name: name.trim(),
-      brand: brand.trim(),
-      price,
-      status: status || EQUIPMENT_STATUS.ACTIVE,
-      purchaseDate: purchaseDate || '',
-      maintenanceHistory: maintenanceHistory || [],
+    const equipmentToAdd = {
+      ...rest,
+      // Parse muscleCategories if it comes as string from form data
+      muscleCategories: typeof muscleCategories === 'string' ? JSON.parse(muscleCategories) : muscleCategories || [],
+      // Set image URL from uploaded file
+      image: image ? image.path : '',
+      // Ensure locationId is included
+      locationId: rest.locationId,
     }
 
-    const result = await equipmentModel.createNew(dataToSave)
+    console.log('🚀 ~ createEquipment ~ equipmentToAdd:', equipmentToAdd)
+
+    // Create equipment
+    const result = await equipmentModel.createNew(equipmentToAdd)
+
+    // Get the newly created equipment
+    const equipment = await equipmentModel.getDetailById(result.insertedId)
 
     return {
       success: true,
       message: 'Equipment created successfully',
-      equipmentId: result.insertedId,
+      equipment: sanitize(equipment),
     }
   } catch (error) {
     throw new Error(error)
@@ -59,12 +60,8 @@ const getEquipmentById = async (equipmentId) => {
 
 const getEquipmentsByLocationId = async (locationId) => {
   try {
-    // Validate location exists (uncomment when location model is available)
-    // const isLocationExist = await locationModel.getDetailById(locationId)
-    // if (isLocationExist === null) return { success: false, message: 'Location not found' }
-
     const equipments = await equipmentModel.getEquipmentsByLocationId(locationId)
-    console.log('🚀 ~ getEquipmentsByLocationId ~ equipments:', equipments)
+    console.log('🚀 ~ getEquipmentsByLocationId ~ equipments count:', equipments.length)
 
     return {
       success: true,
@@ -96,7 +93,7 @@ const getAllEquipments = async () => {
 const getEquipmentsByStatus = async (status) => {
   try {
     const equipments = await equipmentModel.getEquipmentsByStatus(status)
-    console.log('🚀 ~ getEquipmentsByStatus ~ equipments:', equipments)
+    console.log('🚀 ~ getEquipmentsByStatus ~ equipments:', equipments.length)
 
     return {
       success: true,
@@ -109,29 +106,35 @@ const getEquipmentsByStatus = async (status) => {
   }
 }
 
-const updateEquipment = async (equipmentId, data) => {
+const updateEquipment = async (req) => {
   try {
+    const equipmentId = req.params.id
+    const image = req.file
+    const { muscleCategories, ...rest } = req.body
+
     // Check if equipment exists
     const isEquipmentExist = await equipmentModel.getDetailById(equipmentId)
     console.log('🚀 ~ updateEquipment ~ isEquipmentExist:', isEquipmentExist)
-    if (isEquipmentExist === null) return { success: false, message: 'Equipment not found' }
+    if (isEquipmentExist === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
-    // If updating locationId, validate it exists (uncomment when location model is available)
-    // if (data.locationId) {
-    //   const isLocationExist = await locationModel.getDetailById(data.locationId)
-    //   if (isLocationExist === null) return { success: false, message: 'Location not found' }
-    // }
+    const updateData = {
+      ...rest,
+      // Handle image update
+      ...(image && { image: image.path }),
+      // Handle muscleCategories update
+      ...(muscleCategories && {
+        muscleCategories: typeof muscleCategories === 'string' ? JSON.parse(muscleCategories) : muscleCategories,
+      }),
+      // Convert locationId to ensure it's properly formatted
+      ...(rest.locationId && { locationId: rest.locationId }),
+      updatedAt: Date.now(),
+    }
 
-    const dataToUpdate = {}
+    console.log('🚀 ~ updateEquipment ~ updateData:', updateData)
 
-    if (data.locationId) dataToUpdate.locationId = data.locationId
-    if (data.name) dataToUpdate.name = data.name.trim()
-    if (data.brand) dataToUpdate.brand = data.brand.trim()
-    if (data.price !== undefined) dataToUpdate.price = data.price
-    if (data.status) dataToUpdate.status = data.status
-    if (data.purchaseDate !== undefined) dataToUpdate.purchaseDate = data.purchaseDate
-
-    const result = await equipmentModel.updateInfo(equipmentId, dataToUpdate)
+    const result = await equipmentModel.updateInfo(equipmentId, updateData)
     console.log('🚀 ~ updateEquipment ~ result:', result)
 
     if (result === null) {
@@ -151,11 +154,50 @@ const updateEquipment = async (equipmentId, data) => {
   }
 }
 
+const updateEquipmentStatus = async (equipmentId, status) => {
+  try {
+    // Check if equipment exists
+    const isEquipmentExist = await equipmentModel.getDetailById(equipmentId)
+    if (isEquipmentExist === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
+
+    // Validate status
+    const validStatuses = Object.values(EQUIPMENT_STATUS)
+    if (!validStatuses.includes(status)) {
+      return {
+        success: false,
+        message: `Invalid status. Valid statuses are: ${validStatuses.join(', ')}`,
+      }
+    }
+
+    const result = await equipmentModel.updateStatus(equipmentId, status)
+    console.log('🚀 ~ updateEquipmentStatus ~ result:', result)
+
+    if (result === null) {
+      return {
+        success: false,
+        message: 'Failed to update equipment status',
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Equipment status updated successfully',
+      equipment: sanitize(result),
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 const addMaintenanceRecord = async (equipmentId, maintenanceData) => {
   try {
     // Check if equipment exists
     const isEquipmentExist = await equipmentModel.getDetailById(equipmentId)
-    if (isEquipmentExist === null) return { success: false, message: 'Equipment not found' }
+    if (isEquipmentExist === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
     const maintenanceRecord = {
       date: maintenanceData.date,
@@ -188,7 +230,9 @@ const updateMaintenanceRecord = async (equipmentId, maintenanceIndex, updateData
   try {
     // Check if equipment exists
     const equipment = await equipmentModel.getDetailById(equipmentId)
-    if (equipment === null) return { success: false, message: 'Equipment not found' }
+    if (equipment === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
     // Check if maintenance record index is valid
     if (
@@ -229,7 +273,9 @@ const deleteMaintenanceRecord = async (equipmentId, maintenanceIndex) => {
   try {
     // Check if equipment exists
     const equipment = await equipmentModel.getDetailById(equipmentId)
-    if (equipment === null) return { success: false, message: 'Equipment not found' }
+    if (equipment === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
     // Check if maintenance record index is valid
     if (
@@ -260,47 +306,14 @@ const deleteMaintenanceRecord = async (equipmentId, maintenanceIndex) => {
   }
 }
 
-const deleteEquipment = async (equipmentId) => {
-  try {
-    // Check if equipment exists
-    const isEquipmentExist = await equipmentModel.getDetailById(equipmentId)
-    console.log('🚀 ~ deleteEquipment ~ isEquipmentExist:', isEquipmentExist)
-    if (isEquipmentExist === null) return { success: false, message: 'Equipment not found' }
-
-    // TODO: Add business logic validation
-    // - Check if equipment is currently in use
-    // - Check if equipment has active bookings
-    // Example:
-    // if (isEquipmentExist.status === EQUIPMENT_STATUS.ACTIVE) {
-    //   return { success: false, message: 'Cannot delete active equipment. Please set status to broken or maintenance first.' }
-    // }
-
-    const result = await equipmentModel.deleteEquipment(equipmentId)
-    console.log('🚀 ~ deleteEquipment ~ result:', result)
-
-    if (result === 0) {
-      return {
-        success: false,
-        message: 'Failed to delete equipment',
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Equipment deleted successfully',
-      deletedCount: result,
-    }
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
 const softDeleteEquipment = async (equipmentId) => {
   try {
     // Check if equipment exists
     const isEquipmentExist = await equipmentModel.getDetailById(equipmentId)
     console.log('🚀 ~ softDeleteEquipment ~ isEquipmentExist:', isEquipmentExist)
-    if (isEquipmentExist === null) return { success: false, message: 'Equipment not found' }
+    if (isEquipmentExist === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
     const result = await equipmentModel.softDeleteEquipment(equipmentId)
     console.log('🚀 ~ softDeleteEquipment ~ result:', result)
@@ -325,7 +338,7 @@ const softDeleteEquipment = async (equipmentId) => {
 const searchEquipments = async (searchTerm) => {
   try {
     const equipments = await equipmentModel.searchEquipments(searchTerm)
-    console.log('🚀 ~ searchEquipments ~ equipments:', equipments)
+    console.log('🚀 ~ searchEquipments ~ equipments:', equipments.length)
 
     return {
       success: true,
@@ -342,7 +355,9 @@ const searchEquipments = async (searchTerm) => {
 const getMaintenanceHistory = async (equipmentId) => {
   try {
     const equipment = await equipmentModel.getDetailById(equipmentId)
-    if (equipment === null) return { success: false, message: 'Equipment not found' }
+    if (equipment === null) {
+      return { success: false, message: 'Equipment not found' }
+    }
 
     return {
       success: true,
@@ -356,6 +371,22 @@ const getMaintenanceHistory = async (equipmentId) => {
   }
 }
 
+const getEquipmentsByMuscleCategory = async (muscleCategory) => {
+  try {
+    const equipments = await equipmentModel.getEquipmentsByMuscleCategory(muscleCategory)
+    console.log('🚀 ~ getEquipmentsByMuscleCategory ~ equipments:', equipments.length)
+
+    return {
+      success: true,
+      message: `Equipments for muscle category '${muscleCategory}' retrieved successfully`,
+      equipments: equipments.map((equipment) => sanitize(equipment)),
+      total: equipments.length,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const equipmentService = {
   createEquipment,
   getEquipmentById,
@@ -363,11 +394,12 @@ export const equipmentService = {
   getAllEquipments,
   getEquipmentsByStatus,
   updateEquipment,
+  updateEquipmentStatus,
   addMaintenanceRecord,
   updateMaintenanceRecord,
   deleteMaintenanceRecord,
-  deleteEquipment,
   softDeleteEquipment,
   searchEquipments,
   getMaintenanceHistory,
+  getEquipmentsByMuscleCategory,
 }

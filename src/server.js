@@ -9,6 +9,7 @@ import { CONNECT_DB } from './config/mongodb.config.js'
 import { initRedis } from '~/utils/redis.js'
 import { env } from './config/environment.config.js'
 import { socketService } from '~/utils/socket.service.js'
+import { startAllJobs } from './jobs/index.js'
 
 const START_APP = () => {
   // Đọc biến môi trường từ file .env
@@ -22,7 +23,7 @@ const START_APP = () => {
 
   // Initialize Socket.IO
   socketService.init(server)
-  console.log('📡 Socket.IO server initialized')
+  console.log('Socket.IO server initialized')
 
   // Middleware xử lý JSON body
   app.use(express.json())
@@ -53,19 +54,19 @@ const START_APP = () => {
     console.log('---------------- BE', env.BE_URL)
     console.log('---------------- FE', env.FE_URL)
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🛠️ Dev server is running at http://localhost:${PORT}`)
+      console.log(`Dev server is running at http://localhost:${PORT}`)
     } else if (process.env.NODE_ENV === 'production') {
-      console.log(`🚀 Production server is running on port ${PORT}`)
+      console.log(`Production server is running on port ${PORT}`)
     } else {
-      console.log(`✅ Server is running at http://localhost:${PORT} (env: ${process.env.NODE_ENV})`)
+      console.log(`Server is running at http://localhost:${PORT} (env: ${process.env.NODE_ENV})`)
     }
   })
 
   // Graceful shutdown
   process.on('SIGINT', () => {
-    console.log('🛑 Server is shutting down...')
+    console.log('Server is shutting down...')
     server.close(() => {
-      console.log('✅ Server closed')
+      console.log('Server closed')
       process.exit(0)
     })
   })
@@ -79,7 +80,12 @@ const START_APP = () => {
 
     console.log('Connecting to Redis Cloud...')
     await initRedis()
-    console.log('✅ Connected to Redis Cloud!')
+    console.log('Connected to Redis Cloud!')
+
+    // Start all scheduled jobs after database connections are established
+    console.log('Starting scheduled jobs...')
+    await startAllJobs()
+    console.log('Scheduled jobs started successfully!')
 
     START_APP()
   } catch (error) {

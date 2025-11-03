@@ -1,3 +1,6 @@
+/* eslint-disable indent */
+// utils.js - Extended utility functions for gym management system
+
 export const sanitize = (data, fieldsToRemove = []) => {
   if (!data) return null
 
@@ -30,20 +33,17 @@ export const convertVnpayDateToISO = (vnp_PayDate) => {
   const minute = vnp_PayDate.substring(10, 12)
   const second = vnp_PayDate.substring(12, 14)
 
-  // Tạo đối tượng Date
   const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`)
 
-  return date.toISOString() // Trả về ISO 8601
+  return date.toISOString()
 }
 
 export function calculateEndDate(startDateISO, monthsToAdd) {
   const startDate = new Date(startDateISO)
 
-  // Thêm số tháng
   const endDate = new Date(startDate)
   endDate.setMonth(endDate.getMonth() + monthsToAdd)
 
-  // Trả về theo chuẩn ISO
   return endDate.toISOString()
 }
 
@@ -77,15 +77,12 @@ export function calculateDiscountedPrice(originalPrice, discountPercent) {
 export const createRedirectUrl = (paymentData, baseUrl, service) => {
   const params = new URLSearchParams()
 
-  // Thêm tham số service đầu tiên
   params.append('service', service)
 
-  // Thêm các tham số từ paymentData vào URLSearchParams
   Object.entries(paymentData).forEach(([key, value]) => {
     params.append(key, value)
   })
 
-  // Nối query string vào baseUrl
   return `${baseUrl}${params.toString()}`
 }
 
@@ -111,39 +108,31 @@ export function isValidDateRange(start, end) {
 }
 
 // Helper function to generate class sessions
-// Helper function to generate class sessions
 export const generateClassSessions = (classId, startDate, endDate, recurrenceArray, trainers, className) => {
   const sessions = []
   const start = new Date(startDate)
   const end = new Date(endDate)
-  const now = new Date() // Current date and time
+  const now = new Date()
 
-  // Iterate through each recurrence pattern
   recurrenceArray.forEach((recurrence) => {
     const { dayOfWeek, startTime, endTime, roomId } = recurrence
 
-    // Find the first occurrence of the target day of week
     let currentDate = new Date(start)
 
-    // Adjust to the first occurrence of the target day
     while (currentDate.getDay() !== dayOfWeek) {
       currentDate.setDate(currentDate.getDate() + 1)
     }
 
-    // Generate sessions for every week until end date
     while (currentDate <= end) {
-      // Create session start and end datetime
       const sessionStart = new Date(currentDate)
       sessionStart.setHours(startTime.hour, startTime.minute, 0, 0)
 
       const sessionEnd = new Date(currentDate)
       sessionEnd.setHours(endTime.hour, endTime.minute, 0, 0)
 
-      // Calculate hours (duration in hours)
       const durationMs = sessionEnd - sessionStart
-      const hours = durationMs / (1000 * 60 * 60) // Convert milliseconds to hours
+      const hours = durationMs / (1000 * 60 * 60)
 
-      // Only create session if it's in the future
       if (sessionStart > now) {
         sessions.push({
           classId: classId.toString(),
@@ -152,12 +141,11 @@ export const generateClassSessions = (classId, startDate, endDate, recurrenceArr
           roomId: roomId,
           startTime: sessionStart.toISOString(),
           endTime: sessionEnd.toISOString(),
-          hours: hours, // Added hours field
+          hours: hours,
           title: `${className} - ${getDayName(dayOfWeek)} ${formatTime(startTime)}-${formatTime(endTime)}`,
         })
       }
 
-      // Move to next week
       currentDate.setDate(currentDate.getDate() + 7)
     }
   })
@@ -176,4 +164,157 @@ export const formatTime = (time) => {
   const hour = time.hour.toString().padStart(2, '0')
   const minute = time.minute.toString().padStart(2, '0')
   return `${hour}:${minute}`
+}
+
+// Additional helper functions for chatbot
+export function formatPrice(price) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(price)
+}
+
+export function formatDateVN(dateString) {
+  if (!dateString) return 'N/A'
+  return new Date(dateString).toLocaleDateString('vi-VN')
+}
+
+export function formatDateTimeVN(dateString) {
+  if (!dateString) return 'N/A'
+  return new Date(dateString).toLocaleString('vi-VN')
+}
+
+export function formatDateRange(startDate, endDate) {
+  const start = new Date(startDate).toLocaleDateString('vi-VN')
+  const end = new Date(endDate).toLocaleDateString('vi-VN')
+
+  if (start === end) {
+    return start
+  }
+
+  return `${start} - ${end}`
+}
+
+export function calculateTimeUntil(targetDate) {
+  const now = new Date()
+  const target = new Date(targetDate)
+  const diffMs = target - now
+
+  if (diffMs <= 0) return { hours: 0, minutes: 0, canCancel: false }
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60))
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+  return {
+    hours,
+    minutes,
+    totalHours: diffMs / (1000 * 60 * 60),
+    canCancel: diffMs > 1 * 60 * 60 * 1000, // 1 hour in milliseconds
+  }
+}
+
+// Date range calculations for schedule viewing
+export function calculateDateRange(timeRange) {
+  const now = new Date()
+  let startDate, endDate
+
+  switch (timeRange) {
+    case 'today':
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+      break
+
+    case 'tomorrow':
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000)
+      break
+
+    case 'this_week':
+      const dayOfWeek = now.getDay()
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToMonday)
+      endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+      break
+
+    case 'next_week':
+      const dayOfWeekNext = now.getDay()
+      const daysToNextMonday = dayOfWeekNext === 0 ? 1 : 8 - dayOfWeekNext
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToNextMonday)
+      endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+      break
+
+    case 'this_month':
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      break
+
+    default: // 'upcoming' - next 7 days
+      startDate = new Date(now)
+      endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  }
+
+  return {
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+  }
+}
+
+export function getTimeRangeText(timeRange) {
+  switch (timeRange) {
+    case 'today':
+      return 'hôm nay'
+    case 'tomorrow':
+      return 'ngày mai'
+    case 'this_week':
+      return 'tuần này'
+    case 'next_week':
+      return 'tuần tới'
+    case 'this_month':
+      return 'tháng này'
+    default:
+      return '7 ngày tới'
+  }
+}
+
+// Entity extraction utilities
+export function extractTimeRangeFromText(text) {
+  const textLower = text.toLowerCase()
+
+  if (textLower.includes('hôm nay') || textLower.includes('today')) return 'today'
+  if (textLower.includes('ngày mai') || textLower.includes('tomorrow')) return 'tomorrow'
+  if (textLower.includes('tuần này') || textLower.includes('this week')) return 'this_week'
+  if (textLower.includes('tuần tới') || textLower.includes('next week')) return 'next_week'
+  if (textLower.includes('tháng này') || textLower.includes('this month')) return 'this_month'
+
+  return 'upcoming'
+}
+
+export function extractConfirmationFromText(text) {
+  return /xác nhận|đồng ý|ok|yes|có/i.test(text)
+}
+
+// Validation utilities
+export function validateEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+export function validatePhone(phone) {
+  // Vietnamese phone format
+  const phoneRegex = /^(\+84|84|0)([3|5|7|8|9])([0-9]{8})$/
+  return phoneRegex.test(phone)
+}
+
+export function validatePassword(password) {
+  // At least 6 characters
+  return password && password.length >= 6
+}
+
+// Random ID generators
+export function generateAnonymousId() {
+  return `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
+
+export function generateSessionId() {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }

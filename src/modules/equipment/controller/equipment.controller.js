@@ -3,7 +3,7 @@ import { equipmentService } from '../service/equipment.service'
 
 const createEquipment = async (req, res, next) => {
   try {
-    const result = await equipmentService.createEquipment(req.body)
+    const result = await equipmentService.createEquipment(req)
 
     if (result.success) {
       res.status(StatusCodes.CREATED).json(result)
@@ -49,7 +49,11 @@ const getAllEquipments = async (req, res, next) => {
   try {
     const result = await equipmentService.getAllEquipments()
 
-    res.status(StatusCodes.OK).json(result)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
   } catch (error) {
     next(error)
   }
@@ -60,7 +64,26 @@ const getEquipmentsByStatus = async (req, res, next) => {
     const status = req.params.status
     const result = await equipmentService.getEquipmentsByStatus(status)
 
-    res.status(StatusCodes.OK).json(result)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getEquipmentsByMuscleCategory = async (req, res, next) => {
+  try {
+    const muscleCategory = req.params.muscleCategory
+    const result = await equipmentService.getEquipmentsByMuscleCategory(muscleCategory)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
   } catch (error) {
     next(error)
   }
@@ -68,8 +91,23 @@ const getEquipmentsByStatus = async (req, res, next) => {
 
 const updateEquipment = async (req, res, next) => {
   try {
+    const result = await equipmentService.updateEquipment(req)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+const updateEquipmentStatus = async (req, res, next) => {
+  try {
     const equipmentId = req.params.id
-    const result = await equipmentService.updateEquipment(equipmentId, req.body)
+    const { status } = req.body
+    const result = await equipmentService.updateEquipmentStatus(equipmentId, status)
 
     if (result.success) {
       res.status(StatusCodes.OK).json(result)
@@ -128,22 +166,6 @@ const deleteMaintenanceRecord = async (req, res, next) => {
   }
 }
 
-const deleteEquipment = async (req, res, next) => {
-  try {
-    const equipmentId = req.params.id
-    console.log('🚀 ~ deleteEquipment ~ equipmentId:', equipmentId)
-    const result = await equipmentService.deleteEquipment(equipmentId)
-
-    if (result.success) {
-      res.status(StatusCodes.OK).json(result)
-    } else {
-      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
-    }
-  } catch (error) {
-    next(error)
-  }
-}
-
 const softDeleteEquipment = async (req, res, next) => {
   try {
     const equipmentId = req.params.id
@@ -164,7 +186,11 @@ const searchEquipments = async (req, res, next) => {
     const searchTerm = req.query.q
     const result = await equipmentService.searchEquipments(searchTerm)
 
-    res.status(StatusCodes.OK).json(result)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
   } catch (error) {
     next(error)
   }
@@ -191,11 +217,12 @@ export const equipmentController = {
   getEquipmentsByLocationId,
   getAllEquipments,
   getEquipmentsByStatus,
+  getEquipmentsByMuscleCategory,
   updateEquipment,
+  updateEquipmentStatus,
   addMaintenanceRecord,
   updateMaintenanceRecord,
   deleteMaintenanceRecord,
-  deleteEquipment,
   softDeleteEquipment,
   searchEquipments,
   getMaintenanceHistory,

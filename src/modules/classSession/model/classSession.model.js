@@ -14,9 +14,7 @@ import { scheduleModel } from '~/modules/schedule/model/schedule.model'
 const CLASS_SESSION_COLLECTION_NAME = 'class_sessions'
 const CLASS_SESSION_COLLECTION_SCHEMA = Joi.object({
   classId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
-  trainers: Joi.array()
-    .items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE))
-    .default([]),
+  trainers: Joi.array().items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)).default([]),
   users: Joi.array().items(Joi.string().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE)).default([]),
   roomId: Joi.string().required().pattern(OBJECT_ID_RULE).message(OBJECT_ID_RULE_MESSAGE),
   startTime: Joi.string().isoDate().required(),
@@ -344,9 +342,7 @@ const checkPTScheduleConflict = async (trainerId, startTime, endTime, classId) =
 
     if (!classTrainerIds.includes(trainerObjectId.toString())) {
       // Get trainer details for better error message
-      const trainerDetails = await db
-        .collection(trainerModel.TRAINER_COLLECTION_NAME)
-        .findOne({ _id: trainerObjectId })
+      const trainerDetails = await db.collection(trainerModel.TRAINER_COLLECTION_NAME).findOne({ _id: trainerObjectId })
 
       if (!trainerDetails) {
         return {
@@ -404,9 +400,7 @@ const checkPTScheduleConflict = async (trainerId, startTime, endTime, classId) =
 
     for (const session of existingClassSessions) {
       // Lookup class and room details
-      const sessionClass = await db
-        .collection(classModel.CLASS_COLLECTION_NAME)
-        .findOne({ _id: session.classId })
+      const sessionClass = await db.collection(classModel.CLASS_COLLECTION_NAME).findOne({ _id: session.classId })
 
       const roomDetails = await db.collection(roomModel.ROOM_COLLECTION_NAME).findOne({ _id: session.roomId })
 
@@ -472,14 +466,10 @@ const checkPTScheduleConflict = async (trainerId, startTime, endTime, classId) =
 
     // 6. Get trainer details for the response
     if (allConflicts.length > 0) {
-      const trainerDetails = await db
-        .collection(trainerModel.TRAINER_COLLECTION_NAME)
-        .findOne({ _id: trainerObjectId })
+      const trainerDetails = await db.collection(trainerModel.TRAINER_COLLECTION_NAME).findOne({ _id: trainerObjectId })
 
       // Get user details for trainer
-      const user = await db
-        .collection(userModel.USER_COLLECTION_NAME)
-        .findOne({ _id: trainerDetails?.userId })
+      const user = await db.collection(userModel.USER_COLLECTION_NAME).findOne({ _id: trainerDetails?.userId })
 
       return {
         hasConflict: true,
@@ -580,9 +570,7 @@ const checkRoomScheduleConflict = async (sessionId, startTime, endTime, roomId) 
 
     for (const session of conflictingSessions) {
       // Get class details
-      const classDetails = await db
-        .collection(classModel.CLASS_COLLECTION_NAME)
-        .findOne({ _id: session.classId })
+      const classDetails = await db.collection(classModel.CLASS_COLLECTION_NAME).findOne({ _id: session.classId })
 
       // Get trainer details
       const trainerDetails = await db
@@ -629,6 +617,178 @@ const checkRoomScheduleConflict = async (sessionId, startTime, endTime, roomId) 
     throw new Error(`Error checking room schedule conflict: ${error.message}`)
   }
 }
+// Lấy các class sessions sắp tới trong khoảng thời gian nhất định để gửi reminder
+const getUpcomingClassSessionsForReminder = async (minutesBefore) => {
+  try {
+    const now = new Date()
+    const reminderTime = new Date(now.getTime() + minutesBefore * 60 * 1000)
+
+    const upcomingClassSessions = await GET_DB()
+      .collection(CLASS_SESSION_COLLECTION_NAME)
+      .aggregate([
+        // Match class sessions trong khoảng thời gian reminder
+        {
+          $match: {
+            _destroy: false,
+            users: { $exists: true, $not: { $size: 0 } }, // Chỉ sessions có users
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$startTime' } }, now] },
+                { $lte: [{ $dateFromString: { dateString: '$startTime' } }, reminderTime] },
+              ],
+            },
+          },
+        },
+        // Join với classes để lấy class info
+        {
+          $lookup: {
+            from: classModel.CLASS_COLLECTION_NAME,
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'class',
+          },
+        },
+        {
+          $unwind: '$class',
+        },
+        // Join với rooms để lấy room info
+        {
+          $lookup: {
+            from: roomModel.ROOM_COLLECTION_NAME,
+            localField: 'roomId',
+            foreignField: '_id',
+            as: 'room',
+          },
+        },
+        {
+          $unwind: '$room',
+        },
+        // Join với locations để lấy location info
+        {
+          $lookup: {
+            from: locationModel.LOCATION_COLLECTION_NAME,
+            localField: 'room.locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Join với trainers để lấy trainer info
+        {
+          $lookup: {
+            from: trainerModel.TRAINER_COLLECTION_NAME,
+            localField: 'trainers',
+            foreignField: '_id',
+            as: 'trainerDetails',
+          },
+        },
+        // Join với users để lấy trainer user info
+        {
+          $lookup: {
+            from: userModel.USER_COLLECTION_NAME,
+            localField: 'trainerDetails.userId',
+            foreignField: '_id',
+            as: 'trainerUsers',
+          },
+        },
+        // Join với users để lấy enrolled users info
+        {
+          $lookup: {
+            from: userModel.USER_COLLECTION_NAME,
+            localField: 'users',
+            foreignField: '_id',
+            as: 'enrolledUsers',
+          },
+        },
+        // Project final structure
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            startTime: 1,
+            endTime: 1,
+            hours: 1,
+            users: 1,
+            trainers: 1,
+            class: {
+              _id: '$class._id',
+              name: '$class.name',
+              description: '$class.description',
+              classType: '$class.classType',
+            },
+            room: {
+              _id: '$room._id',
+              name: '$room.name',
+              capacity: '$room.capacity',
+            },
+            location: {
+              _id: '$location._id',
+              name: '$location.name',
+              address: '$location.address',
+            },
+            trainerUsers: {
+              $map: {
+                input: '$trainerUsers',
+                as: 'trainer',
+                in: {
+                  _id: '$$trainer._id',
+                  fullName: '$$trainer.fullName',
+                  phone: '$$trainer.phone',
+                  avatar: '$$trainer.avatar',
+                },
+              },
+            },
+            enrolledUsers: {
+              $map: {
+                input: '$enrolledUsers',
+                as: 'user',
+                in: {
+                  _id: '$$user._id',
+                  fullName: '$$user.fullName',
+                  phone: '$$user.phone',
+                  avatar: '$$user.avatar',
+                },
+              },
+            },
+          },
+        },
+        // Sort by startTime
+        {
+          $sort: {
+            startTime: 1,
+          },
+        },
+      ])
+      .toArray()
+
+    return upcomingClassSessions
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Thêm method để check user có active enrollment không
+const checkUserActiveEnrollment = async (userId, classId) => {
+  try {
+    const activeEnrollment = await GET_DB()
+      .collection('class_enrollments')
+      .findOne({
+        userId: new ObjectId(String(userId)),
+        classId: new ObjectId(String(classId)),
+        status: 'active',
+        paymentStatus: 'paid',
+        _destroy: false,
+      })
+
+    return activeEnrollment !== null
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Export thêm các methods mới
 export const classSessionModel = {
   CLASS_SESSION_COLLECTION_NAME,
   CLASS_SESSION_COLLECTION_SCHEMA,
@@ -645,4 +805,6 @@ export const classSessionModel = {
   getSessionsByRoom,
   checkPTScheduleConflict,
   checkRoomScheduleConflict,
+  getUpcomingClassSessionsForReminder, // Method mới
+  checkUserActiveEnrollment, // Method mới
 }

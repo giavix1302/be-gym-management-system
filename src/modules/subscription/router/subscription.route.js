@@ -12,8 +12,8 @@ Router.route('/')
     res.json({ message: 'Create QR endpoint' })
   })
 
-Router.route('/:id')
-  .get(subscriptionController.getSubDetailByUserId)
-  .delete(subscriptionController.deleteSubscription)
+Router.route('/staff').post(subscriptionController.subscribeMembershipForStaff)
+
+Router.route('/:id').get(subscriptionController.getSubDetailByUserId).delete(subscriptionController.deleteSubscription)
 
 export const subscriptionRoute = Router

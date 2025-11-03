@@ -51,8 +51,53 @@ const updateInfo = async (userId, data) => {
   }
 }
 
+// NEW: Lấy danh sách user cho staff
+const getListUserForStaff = async (page = 1, limit = 20) => {
+  try {
+    const result = await userModel.getListUserForStaff(page, limit)
+
+    // Sanitize password khỏi kết quả trả về
+    const sanitizedUsers = result.users.map((user) => ({
+      ...user,
+      password: undefined, // Loại bỏ password khỏi response
+      // Có thể sanitize thêm các field nhạy cảm khác nếu cần
+    }))
+
+    return {
+      success: true,
+      message: 'Users retrieved successfully',
+      data: {
+        users: sanitizedUsers,
+        pagination: result.pagination,
+      },
+    }
+  } catch (error) {
+    console.error('🚀 ~ getListUserForStaff ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+// NEW: Xóa mềm user
+const softDeleteUser = async (userId) => {
+  try {
+    const result = await userModel.softDeleteUser(userId)
+
+    if (result.success && result.user) {
+      // Sanitize password khỏi kết quả trả về
+      result.user.password = undefined
+    }
+
+    return result
+  } catch (error) {
+    console.error('🚀 ~ softDeleteUser ~ error:', error)
+    throw new Error(error)
+  }
+}
+
 export const userService = {
   createNew,
   getDetail,
   updateInfo,
+  getListUserForStaff, // NEW
+  softDeleteUser, // NEW
 }

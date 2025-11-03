@@ -150,10 +150,10 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
   }
 }
 
-const getMessagesByConversationId = async (conversationId, userId, page = 1, limit = 50, userRole = null) => {
+const getMessagesByConversationId = async (conversationId, userId, page = 1, limit = 1, userRole = null) => {
   try {
     const pageNum = parseInt(page) || 1
-    const limitNum = parseInt(limit) || 1
+    const limitNum = parseInt(limit) || 50
 
     console.log('🚀 ~ getMessagesByConversationId ~ params:', {
       conversationId,
@@ -181,6 +181,10 @@ const getMessagesByConversationId = async (conversationId, userId, page = 1, lim
     }
 
     const result = await messageModel.getMessagesByConversationId(conversationId, pageNum, limitNum)
+    console.log(
+      '🚀 ~ getMessagesByConversationId ~ result:',
+      result.messages.map((message) => sanitize(message))
+    )
 
     return {
       success: true,

@@ -2,7 +2,7 @@ import { ObjectId, ReturnDocument } from 'mongodb'
 import Joi from 'joi'
 import { GET_DB } from '~/config/mongodb.config.js'
 import { OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators.js'
-import { EQUIPMENT_STATUS } from '~/utils/constants.js'
+import { EQUIPMENT_STATUS, EQUIPMENT_MUSCLE_CATEGORIES } from '~/utils/constants.js'
 
 const EQUIPMENT_COLLECTION_NAME = 'equipments'
 const EQUIPMENT_COLLECTION_SCHEMA = Joi.object({
@@ -10,10 +10,39 @@ const EQUIPMENT_COLLECTION_SCHEMA = Joi.object({
   name: Joi.string().required().min(2).max(100).trim().strict(),
   brand: Joi.string().required().min(1).max(50).trim().strict(),
   price: Joi.number().min(0).required(),
+  image: Joi.string().trim().strict().default(''),
 
   status: Joi.string()
     .valid(EQUIPMENT_STATUS.ACTIVE, EQUIPMENT_STATUS.MAINTENANCE, EQUIPMENT_STATUS.BROKEN)
     .default(EQUIPMENT_STATUS.ACTIVE),
+
+  // Muscle categories that this equipment can train
+  muscleCategories: Joi.array()
+    .items(
+      Joi.string().valid(
+        EQUIPMENT_MUSCLE_CATEGORIES.CHEST,
+        EQUIPMENT_MUSCLE_CATEGORIES.SHOULDERS,
+        EQUIPMENT_MUSCLE_CATEGORIES.ARMS,
+        EQUIPMENT_MUSCLE_CATEGORIES.BICEPS,
+        EQUIPMENT_MUSCLE_CATEGORIES.TRICEPS,
+        EQUIPMENT_MUSCLE_CATEGORIES.BACK,
+        EQUIPMENT_MUSCLE_CATEGORIES.LATS,
+        EQUIPMENT_MUSCLE_CATEGORIES.ABS,
+        EQUIPMENT_MUSCLE_CATEGORIES.CORE,
+        EQUIPMENT_MUSCLE_CATEGORIES.OBLIQUES,
+        EQUIPMENT_MUSCLE_CATEGORIES.LEGS,
+        EQUIPMENT_MUSCLE_CATEGORIES.QUADRICEPS,
+        EQUIPMENT_MUSCLE_CATEGORIES.HAMSTRINGS,
+        EQUIPMENT_MUSCLE_CATEGORIES.GLUTES,
+        EQUIPMENT_MUSCLE_CATEGORIES.CALVES,
+        EQUIPMENT_MUSCLE_CATEGORIES.FULL_BODY,
+        EQUIPMENT_MUSCLE_CATEGORIES.CARDIO,
+        EQUIPMENT_MUSCLE_CATEGORIES.FOREARMS,
+        EQUIPMENT_MUSCLE_CATEGORIES.NECK,
+        EQUIPMENT_MUSCLE_CATEGORIES.FLEXIBILITY
+      )
+    )
+    .default([]),
 
   purchaseDate: Joi.string().isoDate().allow('').default(''),
 
@@ -21,8 +50,8 @@ const EQUIPMENT_COLLECTION_SCHEMA = Joi.object({
     .items(
       Joi.object({
         date: Joi.string().isoDate().required(),
-        details: Joi.string().min(1).max(500).trim().strict().required(),
-        technician: Joi.string().min(1).max(100).trim().strict().required(),
+        details: Joi.string().min(1).max(500).trim().required(),
+        technician: Joi.string().min(1).max(100).trim().required(),
         cost: Joi.number().min(0).optional(),
       })
     )
@@ -113,6 +142,36 @@ const getEquipmentsByStatus = async (status) => {
   }
 }
 
+const getEquipmentsByMuscleCategory = async (muscleCategory) => {
+  try {
+    const equipments = await GET_DB()
+      .collection(EQUIPMENT_COLLECTION_NAME)
+      .find({
+        muscleCategories: { $in: [muscleCategory] },
+        _destroy: { $ne: true },
+      })
+      .toArray()
+    return equipments
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getEquipmentsByMuscleCategories = async (muscleCategories) => {
+  try {
+    const equipments = await GET_DB()
+      .collection(EQUIPMENT_COLLECTION_NAME)
+      .find({
+        muscleCategories: { $in: muscleCategories },
+        _destroy: { $ne: true },
+      })
+      .toArray()
+    return equipments
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 const updateInfo = async (equipmentId, updateData) => {
   try {
     const dataToUpdate = { ...updateData }
@@ -127,6 +186,21 @@ const updateInfo = async (equipmentId, updateData) => {
       .findOneAndUpdate(
         { _id: new ObjectId(String(equipmentId)), _destroy: { $ne: true } },
         { $set: { ...dataToUpdate, updatedAt: Date.now() } },
+        { returnDocument: 'after' }
+      )
+    return updated
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const updateStatus = async (equipmentId, status) => {
+  try {
+    const updated = await GET_DB()
+      .collection(EQUIPMENT_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(String(equipmentId)), _destroy: { $ne: true } },
+        { $set: { status, updatedAt: Date.now() } },
         { returnDocument: 'after' }
       )
     return updated
@@ -198,17 +272,6 @@ const deleteMaintenanceRecord = async (equipmentId, maintenanceIndex) => {
   }
 }
 
-const deleteEquipment = async (equipmentId) => {
-  try {
-    const deleted = await GET_DB()
-      .collection(EQUIPMENT_COLLECTION_NAME)
-      .deleteOne({ _id: new ObjectId(String(equipmentId)) })
-    return deleted.deletedCount
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
 // Soft delete by setting _destroy flag
 const softDeleteEquipment = async (equipmentId) => {
   try {
@@ -225,7 +288,7 @@ const softDeleteEquipment = async (equipmentId) => {
   }
 }
 
-// Search equipments by name or brand
+// Search equipments by name, brand, or muscle categories
 const searchEquipments = async (searchTerm) => {
   try {
     const equipments = await GET_DB()
@@ -234,6 +297,7 @@ const searchEquipments = async (searchTerm) => {
         $or: [
           { name: { $regex: searchTerm, $options: 'i' } },
           { brand: { $regex: searchTerm, $options: 'i' } },
+          { muscleCategories: { $regex: searchTerm, $options: 'i' } },
         ],
         _destroy: { $ne: true },
       })
@@ -252,11 +316,13 @@ export const equipmentModel = {
   getEquipmentsByLocationId,
   getAllEquipments,
   getEquipmentsByStatus,
+  getEquipmentsByMuscleCategory,
+  getEquipmentsByMuscleCategories,
   updateInfo,
+  updateStatus,
   addMaintenanceRecord,
   updateMaintenanceRecord,
   deleteMaintenanceRecord,
-  deleteEquipment,
   softDeleteEquipment,
   searchEquipments,
 }

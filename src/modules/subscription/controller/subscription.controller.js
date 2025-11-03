@@ -15,6 +15,20 @@ const subscribeMembership = async (req, res, next) => {
   }
 }
 
+const subscribeMembershipForStaff = async (req, res, next) => {
+  try {
+    const result = await subscriptionService.subscribeMembershipForStaff(req.body)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 const getSubDetailByUserId = async (req, res, next) => {
   try {
     const userId = req.params.id
@@ -47,6 +61,7 @@ const deleteSubscription = async (req, res, next) => {
 }
 
 export const subscriptionController = {
+  subscribeMembershipForStaff,
   subscribeMembership,
   getSubDetailByUserId,
   deleteSubscription,

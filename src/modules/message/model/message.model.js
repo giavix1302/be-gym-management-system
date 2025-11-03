@@ -53,11 +53,11 @@ const getDetailById = async (messageId) => {
   }
 }
 
-const getMessagesByConversationId = async (conversationId, page = 1, limit = 50) => {
+const getMessagesByConversationId = async (conversationId, page = 1, limit = 1) => {
   try {
     // Chuyển đổi page và limit thành số để tránh lỗi MongoDB
     const pageNum = parseInt(page) || 1
-    const limitNum = parseInt(limit) || 50
+    const limitNum = parseInt(limit) || 1
     const skip = (pageNum - 1) * limitNum
 
     const messages = await GET_DB()

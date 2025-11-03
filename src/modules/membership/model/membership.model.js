@@ -118,11 +118,7 @@ const updateInfo = async (membershipId, updateData) => {
   try {
     const updatedMembership = await GET_DB()
       .collection(MEMBERSHIP_COLLECTION_NAME)
-      .findOneAndUpdate(
-        { _id: new ObjectId(String(membershipId)) },
-        { $set: updateData },
-        { returnDocument: 'after' }
-      )
+      .findOneAndUpdate({ _id: new ObjectId(String(membershipId)) }, { $set: updateData }, { returnDocument: 'after' })
     return updatedMembership
   } catch (error) {
     throw new Error(error)

@@ -18,6 +18,9 @@ import { classSessionRoute } from '~/modules/classSession/router/classSession.ro
 import { classEnrollmentRoute } from '~/modules/classEnrollment/router/classEnrollment.route'
 import { attendanceRoute } from '~/modules/attendance/router/attendance.route'
 import { conversationRoute } from '~/modules/conversation/router/conversation.route'
+import { chatbotRoute } from '~/modules/chatbot/router/chatbot.route'
+import { notificationRoute } from '~/modules/notification/router/notification.route'
+import { staffRoute } from '~/modules/staff/router/staff.route'
 
 const Router = express.Router()
 
@@ -63,5 +66,11 @@ Router.use('/class-sessions', classSessionRoute)
 Router.use('/attendances', attendanceRoute)
 
 Router.use('/conversations', conversationRoute)
+
+Router.use('/chatbot', chatbotRoute)
+
+Router.use('/notifications', notificationRoute)
+
+Router.use('/staffs', staffRoute)
 
 export const APIs_V1 = Router

@@ -2,6 +2,7 @@ import { scheduleModel } from '~/modules/schedule/model/schedule.model'
 import { bookingModel } from '../model/booking.model'
 import { userModel } from '~/modules/user/model/user.model'
 import { conversationModel } from '~/modules/conversation/model/conversation.model'
+import { notificationService } from '~/modules/notification/service/notification.service'
 import { socketService } from '~/utils/socket.service'
 import { BOOKING_STATUS } from '~/utils/constants.js'
 import { sanitize } from '~/utils/utils'
@@ -13,15 +14,12 @@ const createBooking = async (data) => {
 
     // Validate user exists
     const isUserExist = await userModel.getDetailById(userId)
-    console.log('🚀 ~ createBooking ~ isUserExist:', isUserExist)
     if (isUserExist === null) return { success: false, message: 'User not found' }
 
     const isScheduleExist = await scheduleModel.getDetailById(scheduleId)
-    console.log('🚀 ~ createBooking ~ isScheduleExist:', isScheduleExist)
     if (isScheduleExist === null) return { success: false, message: 'Schedule not found' }
 
     const isLocationExist = await locationModel.getDetailById(locationId)
-    console.log('🚀 ~ createBooking ~ isLocationExist:', isLocationExist)
     if (isLocationExist === null) return { success: false, message: 'Location not found' }
 
     const conflict = await bookingModel.checkUserBookingConflict(userId, scheduleId)
@@ -66,8 +64,6 @@ const createBooking = async (data) => {
         const conversationResult = await conversationModel.createNew(conversationData)
         const createdConversation = await conversationModel.getDetailById(conversationResult.insertedId)
 
-        console.log('🚀 ~ Conversation created for booking:', bookingId)
-
         // Get trainer info for notifications
         const trainerInfo = await userModel.getDetailById(trainerId)
 
@@ -102,8 +98,6 @@ const createBooking = async (data) => {
           })
         }
       } else {
-        console.log('🚀 ~ Conversation already exists between user and trainer')
-
         // Send booking notification to trainer even if conversation exists
         if (socketService.isUserOnline(trainerId)) {
           socketService.sendToUser(trainerId, 'new_booking', {
@@ -138,7 +132,6 @@ const updateBooking = async (bookingId, data) => {
   try {
     // Check if booking exists
     const isBookingExist = await bookingModel.getDetailById(bookingId)
-    console.log('🚀 ~ updateBooking ~ isBookingExist:', isBookingExist)
     if (isBookingExist === null) return { success: false, message: 'Booking not found' }
 
     const dataToUpdate = {
@@ -146,7 +139,6 @@ const updateBooking = async (bookingId, data) => {
     }
 
     const result = await bookingModel.updateInfo(bookingId, dataToUpdate)
-    console.log('🚀 ~ updateBooking ~ result:', result)
 
     // If status is updated, notify both user and trainer
     if (data.status) {
@@ -209,6 +201,9 @@ const cancelBooking = async (bookingId) => {
       return { success: false, message: 'Booking is already cancelled' }
     }
 
+    // Xóa notifications liên quan trước khi cancel booking
+    await notificationService.deleteNotificationsByReference(bookingId, 'BOOKING')
+
     const dataToUpdate = {
       status: BOOKING_STATUS.CANCELLED,
     }
@@ -244,7 +239,7 @@ const cancelBooking = async (bookingId) => {
 
     return {
       success: true,
-      message: 'Booking cancelled successfully',
+      message: 'Booking cancelled successfully and related notifications deleted',
       booking: sanitize(result),
     }
   } catch (error) {
@@ -252,11 +247,38 @@ const cancelBooking = async (bookingId) => {
   }
 }
 
-// Keep all other existing functions unchanged
+const deleteBooking = async (bookingId) => {
+  try {
+    // Check if booking exists
+    const isBookingExist = await bookingModel.getDetailById(bookingId)
+    if (isBookingExist === null) return { success: false, message: 'Booking not found' }
+
+    // Xóa notifications liên quan trước khi delete booking
+    await notificationService.deleteNotificationsByReference(bookingId, 'BOOKING')
+
+    const result = await bookingModel.deleteBooking(bookingId)
+
+    if (result === 0) {
+      return {
+        success: false,
+        message: 'Failed to delete booking',
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Booking and related notifications deleted successfully',
+      deletedCount: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Keep other methods unchanged - getBookingById, getBookingsByUserId, etc.
 const getBookingById = async (bookingId) => {
   try {
     const booking = await bookingModel.getDetailById(bookingId)
-    console.log('🚀 ~ getBookingById ~ booking:', booking)
 
     if (booking === null) {
       return {
@@ -303,7 +325,6 @@ const getBookingsByUserId = async (userId) => {
     if (isUserExist === null) return { success: false, message: 'User not found' }
 
     const bookings = await bookingModel.getBookingsByUserId(userId)
-    console.log('🚀 ~ getBookingsByUserId ~ bookings:', bookings)
 
     return {
       success: true,
@@ -322,7 +343,6 @@ const getUpcomingBookingsByUserId = async (userId) => {
     if (isUserExist === null) return { success: false, message: 'User not found' }
 
     const bookings = await bookingModel.getUpcomingBookingsByUserId(userId)
-    console.log('🚀 ~ getBookingsByUserId ~ bookings:', bookings)
 
     return {
       success: true,
@@ -341,7 +361,6 @@ const getHistoryBookingsByUserId = async (userId) => {
     if (isUserExist === null) return { success: false, message: 'User not found' }
 
     const bookings = await bookingModel.getHistoryBookingsByUserId(userId)
-    console.log('🚀 ~ getBookingsByUserId ~ bookings:', bookings)
 
     return {
       success: true,
@@ -356,7 +375,6 @@ const getHistoryBookingsByUserId = async (userId) => {
 const getAllBookings = async () => {
   try {
     const bookings = await bookingModel.getAllBookings()
-    console.log('🚀 ~ getAllBookings ~ bookings count:', bookings.length)
 
     return {
       success: true,
@@ -369,46 +387,20 @@ const getAllBookings = async () => {
   }
 }
 
-const deleteBooking = async (bookingId) => {
-  try {
-    // Check if booking exists
-    const isBookingExist = await bookingModel.getDetailById(bookingId)
-    console.log('🚀 ~ deleteBooking ~ isBookingExist:', isBookingExist)
-    if (isBookingExist === null) return { success: false, message: 'Booking not found' }
-
-    const result = await bookingModel.deleteBooking(bookingId)
-    console.log('🚀 ~ deleteBooking ~ result:', result)
-
-    if (result === 0) {
-      return {
-        success: false,
-        message: 'Failed to delete booking',
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Booking deleted successfully',
-      deletedCount: result,
-    }
-  } catch (error) {
-    throw new Error(error)
-  }
-}
-
 const softDeleteBooking = async (bookingId) => {
   try {
     // Check if booking exists
     const isBookingExist = await bookingModel.getDetailById(bookingId)
-    console.log('🚀 ~ softDeleteBooking ~ isBookingExist:', isBookingExist)
     if (isBookingExist === null) return { success: false, message: 'Booking not found' }
 
+    // Xóa notifications liên quan trước khi soft delete booking
+    await notificationService.deleteNotificationsByReference(bookingId, 'BOOKING')
+
     const result = await bookingModel.softDeleteBooking(bookingId)
-    console.log('🚀 ~ softDeleteBooking ~ result:', result)
 
     return {
       success: true,
-      message: 'Booking soft deleted successfully',
+      message: 'Booking soft deleted and related notifications removed successfully',
       booking: sanitize(result),
     }
   } catch (error) {
