@@ -153,7 +153,7 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
 const getMessagesByConversationId = async (conversationId, userId, page = 1, limit = 50, userRole = null) => {
   try {
     const pageNum = parseInt(page) || 1
-    const limitNum = parseInt(limit) || 50
+    const limitNum = parseInt(limit) || 1
 
     console.log('🚀 ~ getMessagesByConversationId ~ params:', {
       conversationId,
