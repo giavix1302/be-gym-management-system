@@ -328,9 +328,39 @@ const vnpReturn = async (query) => {
   }
 }
 
+// Lấy danh sách payment theo userId
+const getPaymentsByUserId = async (userId, page = 1, limit = 10) => {
+  try {
+    const result = await paymentModel.getPaymentsByUserId(userId, parseInt(page), parseInt(limit))
+
+    return {
+      success: true,
+      ...result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Lấy danh sách tất cả payment cho admin
+const getAllPaymentsForAdmin = async (page = 1, limit = 10) => {
+  try {
+    const result = await paymentModel.getAllPaymentsForAdmin(parseInt(page), parseInt(limit))
+
+    return {
+      success: true,
+      ...result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const paymentService = {
   createPaymentVnpay,
   createPaymentBookingPtVnpay,
   createPaymentClassVnpay,
   vnpReturn,
+  getPaymentsByUserId,
+  getAllPaymentsForAdmin,
 }

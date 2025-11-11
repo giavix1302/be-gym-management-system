@@ -14,7 +14,7 @@ export const CHATBOT_CONFIG = {
       maxOutputTokens: 1024, // Tăng lên để đủ cho response phức tạp
       candidateCount: 1,
     },
-    SYSTEM_PROMPT: `Bạn là trợ lý AI thông minh của phòng tập Elite Fitness. 
+    SYSTEM_PROMPT: `Bạn là trợ lý AI thông minh của phòng tập THE GYM. 
 
 NHIỆM VỤ:
 - Trả lời câu hỏi về gym một cách chính xác và hữu ích
@@ -31,7 +31,6 @@ QUY TẮC:
   // MongoDB Collection Names - Khớp với models đã tạo
   COLLECTIONS: {
     CONVERSATIONS: 'chatbot_conversations',
-    KNOWLEDGE_BASE: 'chatbot_knowledge_base',
     ACTIONS: 'chatbot_actions',
     GYM_INFO: 'gym_info',
     USERS: 'users',
@@ -143,14 +142,13 @@ Bạn có thể thử lại hoặc liên hệ staff: {hotline}`,
 
   // Gym Info
   GYM_INFO: {
-    NAME: 'Elite Fitness',
-    HOTLINE: '0909 123 456',
-    EMAIL: 'info@gym.com',
-    WEBSITE: 'www.gym.com',
+    NAME: 'THE GYM',
+    HOTLINE: '1900-1234',
+    EMAIL: 'thegym@gmail.com',
+    WEBSITE: 'www.thegym.com',
     ADDRESS: '123 Nguyễn Văn A, Q1, TPHCM',
     OPERATING_HOURS: {
-      WEEKDAYS: '05:00 - 23:00',
-      WEEKENDS: '06:00 - 22:00',
+      DAILY: '06:00 - 22:00',
     },
   },
 

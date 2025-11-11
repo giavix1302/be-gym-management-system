@@ -58,9 +58,46 @@ const createPaymentClassVnpay = async (req, res, next) => {
   }
 }
 
+// Lấy danh sách payment theo userId
+const getPaymentsByUserId = async (req, res, next) => {
+  try {
+    const { userId } = req.params
+    const { page = 1, limit = 10 } = req.query
+
+    const result = await paymentService.getPaymentsByUserId(userId, page, limit)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Lấy danh sách tất cả payment cho admin
+const getAllPaymentsForAdmin = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query
+
+    const result = await paymentService.getAllPaymentsForAdmin(page, limit)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const paymentController = {
   createPaymentVnpay,
   vnpReturn,
   createPaymentBookingPtVnpay,
   createPaymentClassVnpay,
+  getPaymentsByUserId,
+  getAllPaymentsForAdmin,
 }

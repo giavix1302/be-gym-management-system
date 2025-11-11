@@ -20,11 +20,10 @@ Router.route('/:id')
   // Delete room by ID (hard delete)
   .delete(roomValidation.validateRoomId, roomController.deleteRoom)
 
+Router.route('/location/:locationId/sessions').get(roomController.getListRoomByLocationId)
+
 // Route for location's rooms: /api/rooms/location/:locationId
-Router.route('/location/:locationId').get(
-  roomValidation.validateLocationId,
-  roomController.getRoomsByLocationId
-)
+Router.route('/location/:locationId').get(roomValidation.validateLocationId, roomController.getRoomsByLocationId)
 
 // Route for soft delete: /api/rooms/:id/soft-delete
 Router.route('/:id/soft-delete').patch(roomValidation.validateRoomId, roomController.softDeleteRoom)

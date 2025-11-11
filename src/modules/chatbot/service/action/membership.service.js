@@ -37,7 +37,7 @@ const getCurrentUserSubscription = async (userId) => {
 
 const validateAndGetMembership = async (membershipChoice) => {
   try {
-    const memberships = await membershipModel.getAllMemberships()
+    const memberships = await membershipModel.getListWithQuantityUser()
     return memberships.find(
       (m) =>
         m.name.toLowerCase().includes(membershipChoice.toLowerCase()) ||
@@ -52,7 +52,7 @@ const validateAndGetMembership = async (membershipChoice) => {
 // UI helpers
 const showMembershipOptions = async () => {
   try {
-    const memberships = await membershipModel.getAllMemberships()
+    const memberships = await membershipModel.getListWithQuantityUser()
 
     if (!memberships || memberships.length === 0) {
       return {
@@ -216,7 +216,7 @@ export const handleCheckMembership = async (userId) => {
     const subscription = await getCurrentUserSubscription(userId)
 
     if (!subscription) {
-      const availableMemberships = await membershipModel.getAllMemberships()
+      const availableMemberships = await membershipModel.getListWithQuantityUser()
 
       let content = '📋 BẠN CHƯA CÓ GÓI MEMBERSHIP\n\n'
       content += 'Để tham gia các hoạt động gym, bạn cần đăng ký gói membership.\n\n'

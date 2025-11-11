@@ -51,6 +51,32 @@ const updateInfo = async (userId, data) => {
   }
 }
 
+// NEW: Lấy danh sách user cho admin
+const getListUserForAdmin = async (page = 1, limit = 20) => {
+  try {
+    const result = await userModel.getListUserForAdmin(page, limit)
+
+    // Sanitize password khỏi kết quả trả về
+    const sanitizedUsers = result.users.map((user) => ({
+      ...user,
+      password: undefined, // Loại bỏ password khỏi response
+      // Có thể sanitize thêm các field nhạy cảm khác nếu cần
+    }))
+
+    return {
+      success: true,
+      message: 'Users retrieved successfully',
+      data: {
+        users: sanitizedUsers,
+        pagination: result.pagination,
+      },
+    }
+  } catch (error) {
+    console.error('🚀 ~ getListUserForAdmin ~ error:', error)
+    throw new Error(error)
+  }
+}
+
 // NEW: Lấy danh sách user cho staff
 const getListUserForStaff = async (page = 1, limit = 20) => {
   try {
@@ -98,6 +124,7 @@ export const userService = {
   createNew,
   getDetail,
   updateInfo,
+  getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
   softDeleteUser, // NEW
 }

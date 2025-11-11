@@ -1530,6 +1530,211 @@ const getMemberEnrolledClasses = async (userId) => {
   }
 }
 
+const getClassesGroupedByLocation = async () => {
+  try {
+    const db = await GET_DB()
+    const classesGroupedByLocation = await db
+      .collection(CLASS_COLLECTION_NAME)
+      .aggregate([
+        // Match active classes only
+        {
+          $match: { _destroy: false },
+        },
+        // Lookup location details
+        {
+          $lookup: {
+            from: locationModel.LOCATION_COLLECTION_NAME,
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'locationDetails',
+          },
+        },
+        // Lookup trainer details
+        {
+          $lookup: {
+            from: trainerModel.TRAINER_COLLECTION_NAME,
+            localField: 'trainers',
+            foreignField: '_id',
+            as: 'trainerDetails',
+          },
+        },
+        // Lookup user details for trainers
+        {
+          $lookup: {
+            from: userModel.USER_COLLECTION_NAME,
+            localField: 'trainerDetails.userId',
+            foreignField: '_id',
+            as: 'trainerUsers',
+          },
+        },
+        // Lookup class enrollments to count enrolled users
+        {
+          $lookup: {
+            from: classEnrollmentModel.CLASS_ENROLLMENT_COLLECTION_NAME,
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'enrollments',
+          },
+        },
+        // Process the data
+        {
+          $addFields: {
+            locationInfo: { $arrayElemAt: ['$locationDetails', 0] },
+            enrolledCount: {
+              $size: {
+                $filter: {
+                  input: '$enrollments',
+                  cond: { $eq: ['$$this._destroy', false] },
+                },
+              },
+            },
+            // Process trainers with user details
+            processedTrainers: {
+              $map: {
+                input: '$trainerDetails',
+                as: 'trainer',
+                in: {
+                  $let: {
+                    vars: {
+                      userDetail: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: '$trainerUsers',
+                              cond: { $eq: ['$$this._id', '$$trainer.userId'] },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    },
+                    in: {
+                      _id: '$$trainer._id',
+                      name: { $ifNull: ['$$userDetail.fullName', ''] },
+                      specialization: '$$trainer.specialization',
+                    },
+                  },
+                },
+              },
+            },
+            // Format schedule từ recurrence
+            scheduleText: {
+              $reduce: {
+                input: '$recurrence',
+                initialValue: '',
+                in: {
+                  $concat: [
+                    '$$value',
+                    {
+                      $cond: {
+                        if: { $eq: ['$$value', ''] },
+                        then: '',
+                        else: ', ',
+                      },
+                    },
+                    {
+                      $switch: {
+                        branches: [
+                          { case: { $eq: ['$$this.dayOfWeek', 1] }, then: 'Thứ 2' },
+                          { case: { $eq: ['$$this.dayOfWeek', 2] }, then: 'Thứ 3' },
+                          { case: { $eq: ['$$this.dayOfWeek', 3] }, then: 'Thứ 4' },
+                          { case: { $eq: ['$$this.dayOfWeek', 4] }, then: 'Thứ 5' },
+                          { case: { $eq: ['$$this.dayOfWeek', 5] }, then: 'Thứ 6' },
+                          { case: { $eq: ['$$this.dayOfWeek', 6] }, then: 'Thứ 7' },
+                          { case: { $eq: ['$$this.dayOfWeek', 7] }, then: 'CN' },
+                        ],
+                        default: 'Unknown',
+                      },
+                    },
+                    ': ',
+                    {
+                      $concat: [
+                        { $toString: '$$this.startTime.hour' },
+                        ':',
+                        {
+                          $cond: {
+                            if: { $lt: ['$$this.startTime.minute', 10] },
+                            then: { $concat: ['0', { $toString: '$$this.startTime.minute' }] },
+                            else: { $toString: '$$this.startTime.minute' },
+                          },
+                        },
+                        '-',
+                        { $toString: '$$this.endTime.hour' },
+                        ':',
+                        {
+                          $cond: {
+                            if: { $lt: ['$$this.endTime.minute', 10] },
+                            then: { $concat: ['0', { $toString: '$$this.endTime.minute' }] },
+                            else: { $toString: '$$this.endTime.minute' },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        // Project final class structure
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            classType: 1,
+            price: 1,
+            capacity: 1,
+            enrolledCount: 1,
+            scheduleText: 1,
+            trainers: '$processedTrainers',
+            locationInfo: {
+              _id: '$locationInfo._id',
+              name: { $ifNull: ['$locationInfo.name', ''] },
+              address: {
+                street: { $ifNull: ['$locationInfo.address.street', ''] },
+                ward: { $ifNull: ['$locationInfo.address.ward', ''] },
+                province: { $ifNull: ['$locationInfo.address.province', ''] },
+              },
+              phone: { $ifNull: ['$locationInfo.phone', ''] },
+            },
+          },
+        },
+        // Group by location
+        {
+          $group: {
+            _id: '$locationInfo._id',
+            locationName: { $first: '$locationInfo.name' },
+            locationAddress: { $first: '$locationInfo.address' },
+            locationPhone: { $first: '$locationInfo.phone' },
+            classes: {
+              $push: {
+                _id: '$_id',
+                name: '$name',
+                classType: '$classType',
+                price: '$price',
+                capacity: '$capacity',
+                enrolledCount: '$enrolledCount',
+                schedule: '$scheduleText',
+                trainers: '$trainers',
+              },
+            },
+            totalClasses: { $sum: 1 },
+          },
+        },
+        // Sort by location name
+        {
+          $sort: { locationName: 1 },
+        },
+      ])
+      .toArray()
+
+    return classesGroupedByLocation
+  } catch (error) {
+    throw new Error(`Error getting classes grouped by location: ${error.message}`)
+  }
+}
+
+// Và thêm vào export
 export const classModel = {
   CLASS_COLLECTION_NAME,
   CLASS_COLLECTION_SCHEMA,
@@ -1547,4 +1752,5 @@ export const classModel = {
   checkPTScheduleConflict,
   getMemberEnrolledClasses,
   getListClassInfoForTrainer,
+  getClassesGroupedByLocation, // ✅ NEW FUNCTION
 }

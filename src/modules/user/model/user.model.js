@@ -81,6 +81,255 @@ const updateInfo = async (userId, data) => {
   }
 }
 
+// NEW: Lấy danh sách user cho admin với pagination và populate đầy đủ thông tin
+const getListUserForAdmin = async (page = 1, limit = 20) => {
+  try {
+    const skip = (page - 1) * limit
+
+    // Tính ngày 30 ngày trước
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Aggregate pipeline để populate subscriptions, attendances và bookings
+    const pipeline = [
+      // Lọc user chưa bị xóa mềm và chỉ lấy role = "user"
+      {
+        $match: {
+          _destroy: false,
+          role: 'user',
+        },
+      },
+      // Lookup subscriptions
+      {
+        $lookup: {
+          from: 'subscriptions',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'subscriptions',
+          pipeline: [
+            {
+              $match: {
+                _destroy: false,
+              },
+            },
+            {
+              $sort: { createdAt: -1 },
+            },
+            // Chỉ lấy các field cần thiết và tính toán remainingDays
+            {
+              $addFields: {
+                remainingDays: {
+                  $cond: {
+                    if: { $eq: ['$status', 'active'] },
+                    then: {
+                      $max: [
+                        0,
+                        {
+                          $ceil: {
+                            $divide: [
+                              {
+                                $subtract: [{ $dateFromString: { dateString: '$endDate' } }, new Date()],
+                              },
+                              1000 * 60 * 60 * 24, // milliseconds in a day
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                    else: 0,
+                  },
+                },
+              },
+            },
+            // Project để loại bỏ các field không cần thiết
+            {
+              $project: {
+                _id: 1,
+                userId: 1,
+                membershipId: 1,
+                status: 1,
+                paymentStatus: 1,
+                startDate: 1,
+                endDate: 1,
+                remainingSessions: '$remainingDays', // Đổi tên từ remainingDays thành remainingSessions để tương thích với frontend
+              },
+            },
+          ],
+        },
+      },
+      // Lookup attendances - chỉ lấy 30 ngày gần nhất
+      {
+        $lookup: {
+          from: 'attendances',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'attendances',
+          pipeline: [
+            {
+              $match: {
+                _destroy: false,
+                checkinTime: { $gte: thirtyDaysAgo.toISOString() },
+              },
+            },
+            {
+              $sort: { checkinTime: -1 },
+            },
+            // Chỉ lấy các field cần thiết
+            {
+              $project: {
+                _id: 1,
+                locationId: 1,
+                checkinTime: 1,
+                checkoutTime: 1,
+                hours: 1,
+                method: 1,
+              },
+            },
+          ],
+        },
+      },
+      // Lookup bookings với đầy đủ thông tin
+      {
+        $lookup: {
+          from: 'bookings',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'bookings',
+          pipeline: [
+            {
+              $match: {
+                _destroy: false,
+              },
+            },
+            // Join với schedules để lấy thông tin thời gian
+            {
+              $lookup: {
+                from: 'schedules',
+                localField: 'scheduleId',
+                foreignField: '_id',
+                as: 'schedule',
+              },
+            },
+            {
+              $unwind: '$schedule',
+            },
+            // Join với trainers để lấy thông tin trainer
+            {
+              $lookup: {
+                from: 'trainers',
+                localField: 'schedule.trainerId',
+                foreignField: '_id',
+                as: 'trainer',
+              },
+            },
+            {
+              $unwind: '$trainer',
+            },
+            // Join với users để lấy tên trainer
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'trainer.userId',
+                foreignField: '_id',
+                as: 'trainerUser',
+              },
+            },
+            {
+              $unwind: '$trainerUser',
+            },
+            // Join với locations để lấy tên location
+            {
+              $lookup: {
+                from: 'locations',
+                localField: 'locationId',
+                foreignField: '_id',
+                as: 'location',
+              },
+            },
+            {
+              $unwind: '$location',
+            },
+            // Project thông tin booking
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                trainerName: '$trainerUser.fullName',
+                startTime: '$schedule.startTime',
+                endTime: '$schedule.endTime',
+                status: 1,
+                price: 1,
+                locationName: '$location.name',
+                note: 1,
+                createdAt: 1,
+              },
+            },
+            {
+              $sort: { createdAt: -1 },
+            },
+          ],
+        },
+      },
+      // Chỉ lấy các field cần thiết của user
+      {
+        $project: {
+          _id: 1,
+          phone: 1,
+          fullName: 1,
+          email: 1,
+          avatar: 1,
+          age: 1,
+          dateOfBirth: 1,
+          address: 1,
+          gender: 1,
+          role: 1,
+          status: 1,
+          qrCode: 1,
+          createdAt: 1,
+          subscriptions: 1,
+          attendances: 1,
+          booking: '$bookings', // Map bookings thành booking để match với mock data
+        },
+      },
+      // Sort theo thời gian tạo mới nhất
+      {
+        $sort: { createdAt: -1 },
+      },
+      // Pagination
+      {
+        $skip: skip,
+      },
+      {
+        $limit: limit,
+      },
+    ]
+
+    const users = await GET_DB().collection(USER_COLLECTION_NAME).aggregate(pipeline).toArray()
+
+    // Đếm tổng số user để tính pagination (chỉ đếm user có role = "user")
+    const totalUsers = await GET_DB().collection(USER_COLLECTION_NAME).countDocuments({
+      _destroy: false,
+      role: 'user',
+    })
+
+    const totalPages = Math.ceil(totalUsers / limit)
+
+    return {
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalUsers,
+        limit,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 // NEW: Lấy danh sách user cho staff với pagination và populate đầy đủ thông tin
 const getListUserForStaff = async (page = 1, limit = 20) => {
   try {
@@ -247,9 +496,11 @@ const getListUserForStaff = async (page = 1, limit = 20) => {
   }
 }
 
-// NEW: Xóa mềm user với validation
+// NEW: Xóa mềm user với validation cải tiến (bao gồm check booking tương lai)
 const softDeleteUser = async (userId) => {
   try {
+    const now = new Date()
+
     // Kiểm tra user có tồn tại không
     const existingUser = await GET_DB()
       .collection(USER_COLLECTION_NAME)
@@ -294,6 +545,52 @@ const softDeleteUser = async (userId) => {
       return {
         success: false,
         message: 'Cannot delete user who is currently checked in. Please checkout first.',
+      }
+    }
+
+    // NEW: Kiểm tra user có booking chưa kết thúc không
+    const activeBookings = await GET_DB()
+      .collection('bookings')
+      .aggregate([
+        // Match bookings của user
+        {
+          $match: {
+            userId: new ObjectId(String(userId)),
+            _destroy: false,
+          },
+        },
+        // Join với schedules để lấy thông tin thời gian
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        // Lọc những booking có endTime > hiện tại (booking chưa kết thúc)
+        {
+          $match: {
+            $expr: {
+              $gt: [{ $dateFromString: { dateString: '$schedule.endTime' } }, now],
+            },
+            'schedule._destroy': false,
+          },
+        },
+        // Chỉ cần 1 record để check
+        {
+          $limit: 1,
+        },
+      ])
+      .toArray()
+
+    if (activeBookings.length > 0) {
+      return {
+        success: false,
+        message: 'Cannot delete user with ongoing or upcoming bookings. Please wait until all bookings are completed.',
       }
     }
 
@@ -361,6 +658,17 @@ const mockUsers = [
         method: '',
       },
     ],
+    booking: [
+      {
+        title: '',
+        trainerName: '',
+        startTime: '',
+        endTime: '',
+        status: '',
+        price: 0,
+        locationName: '',
+      },
+    ],
   },
 ]
 
@@ -371,6 +679,7 @@ export const userModel = {
   getDetailById,
   getDetailByPhone,
   updateInfo,
+  getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
-  softDeleteUser, // NEW
+  softDeleteUser, // NEW (improved)
 }

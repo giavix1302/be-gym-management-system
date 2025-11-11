@@ -234,6 +234,26 @@ const getRoomAvailability = async (roomId, date) => {
   }
 }
 
+const getListRoomByLocationId = async (locationId) => {
+  try {
+    // Validate location exists (uncomment when location model is available)
+    // const isLocationExist = await locationModel.getDetailById(locationId)
+    // if (isLocationExist === null) return { success: false, message: 'Location not found' }
+
+    const rooms = await roomModel.getListRoomWithClassSessionsByLocationId(locationId)
+    console.log('🚀 ~ getListRoomByLocationId ~ rooms count:', rooms.length)
+
+    return {
+      success: true,
+      message: 'Location rooms with class sessions retrieved successfully',
+      data: rooms, // Trả về trực tiếp array rooms như format yêu cầu
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// Cập nhật export roomService
 export const roomService = {
   createRoom,
   getRoomById,
@@ -243,4 +263,5 @@ export const roomService = {
   deleteRoom,
   softDeleteRoom,
   getRoomAvailability,
+  getListRoomByLocationId, // Thêm method mới
 }

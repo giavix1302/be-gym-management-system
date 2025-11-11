@@ -76,99 +76,33 @@ Router.get(
 Router.get(
   '/admin/conversations',
   authMiddleware,
-
   moduleRateLimiters.chatbot.admin,
   chatbotController.getAllConversations
 )
 
-Router.get(
-  '/admin/conversations/:conversationId',
-  authMiddleware,
-
-  chatbotController.getConversationHistory
-)
+Router.get('/admin/conversations/:conversationId', authMiddleware, chatbotController.getConversationHistory)
 
 // User-specific data access for admins
-Router.get(
-  '/admin/user/:userId/conversations',
-  authMiddleware,
-
-  chatbotController.getConversationsByUserId
-)
+Router.get('/admin/user/:userId/conversations', authMiddleware, chatbotController.getConversationsByUserId)
 
 Router.get('/admin/user/:userId/actions', authMiddleware, chatbotController.getActionsByUserId)
 
 // Actions Management
-Router.get(
-  '/admin/actions',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.getAllActions
-)
-
-// Knowledge Base Management
-Router.get('/admin/knowledge', authMiddleware, chatbotController.getAllKnowledge)
-
-Router.post(
-  '/admin/knowledge',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.createKnowledgeBase
-)
-
-Router.put(
-  '/admin/knowledge/:id',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.updateKnowledgeBase
-)
-
-Router.delete(
-  '/admin/knowledge/:id',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.deleteKnowledge
-)
+Router.get('/admin/actions', authMiddleware, moduleRateLimiters.chatbot.admin, chatbotController.getAllActions)
 
 // Gym Info Management
-Router.get('/admin/gym-info', authMiddleware, chatbotController.getAllGymInfo)
+Router.get('/admin/gym-info', chatbotController.getAllGymInfo)
 
-Router.post(
-  '/admin/gym-info',
-  authMiddleware,
+Router.post('/admin/gym-info', authMiddleware, moduleRateLimiters.chatbot.admin, chatbotController.createGymInfo)
 
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.createGymInfo
-)
+Router.put('/admin/gym-info/:id', authMiddleware, moduleRateLimiters.chatbot.admin, chatbotController.updateGymInfo)
 
-Router.put(
-  '/admin/gym-info/:id',
-  authMiddleware,
+Router.delete('/admin/gym-info/:id', authMiddleware, moduleRateLimiters.chatbot.admin, chatbotController.deleteGymInfo)
 
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.updateGymInfo
-)
-
-Router.delete(
-  '/admin/gym-info/:id',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.deleteGymInfo
-)
-
-// Analytics & Reporting
-Router.get(
-  '/admin/analytics',
-  authMiddleware,
-
-  moduleRateLimiters.chatbot.admin,
-  chatbotController.getChatbotAnalytics
-)
+// Gym Info Advanced Operations
+Router.patch('/admin/gym-info/:id/toggle', authMiddleware, chatbotController.toggleGymInfoStatus)
+Router.post('/admin/gym-info/bulk-update', authMiddleware, chatbotController.bulkUpdateGymInfo)
+Router.get('/admin/gym-info/search', authMiddleware, chatbotController.searchGymInfo)
 
 // ========================================
 // DEVELOPMENT ENDPOINTS (Development Only)
@@ -185,8 +119,6 @@ if (process.env.NODE_ENV === 'development') {
   Router.get('/dev/debug/conversations', authMiddleware, chatbotController.getAllConversations)
 
   Router.get('/dev/debug/actions', authMiddleware, chatbotController.getAllActions)
-
-  Router.get('/dev/debug/knowledge', authMiddleware, chatbotController.getAllKnowledge)
 
   Router.get('/dev/debug/gym-info', authMiddleware, chatbotController.getAllGymInfo)
 }

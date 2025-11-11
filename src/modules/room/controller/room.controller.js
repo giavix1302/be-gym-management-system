@@ -125,6 +125,22 @@ const getRoomAvailability = async (req, res, next) => {
   }
 }
 
+const getListRoomByLocationId = async (req, res, next) => {
+  try {
+    const locationId = req.params.locationId
+    const result = await roomService.getListRoomByLocationId(locationId)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.NOT_FOUND).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Cập nhật export roomController
 export const roomController = {
   createRoom,
   getRoomById,
@@ -134,4 +150,5 @@ export const roomController = {
   deleteRoom,
   softDeleteRoom,
   getRoomAvailability,
+  getListRoomByLocationId, // Thêm method mới
 }

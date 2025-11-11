@@ -1,620 +1,398 @@
-// faq.service.js - FAQ System với Static + Dynamic Data
+// faq.service.js - Simple FAQ service with database integration - NO FALLBACK DATA
 
-import { chatbotKnowledgeModel } from '../model/chatbotKnowledge.model.js'
-import { gymInfoModel } from '../model/gymInfo.model.js'
-import { membershipModel } from '~/modules/membership/model/membership.model.js'
 import { classModel } from '~/modules/class/model/class.model.js'
-import { trainerModel } from '~/modules/trainer/model/trainer.model.js'
-import { equipmentModel } from '~/modules/equipment/model/equipment.model.js'
 import { locationModel } from '~/modules/location/model/location.model.js'
-import { initializeGeminiClient } from '~/config/chatbot.config.js'
+import { membershipModel } from '~/modules/membership/model/membership.model.js'
+import { trainerModel } from '~/modules/trainer/model/trainer.model.js'
+import { formatPrice } from '~/utils/utils.js'
 
-// Category Detection Map
-const CATEGORY_KEYWORDS = {
-  membership: ['gói', 'membership', 'thành viên', 'phí', 'giá', 'chi phí', 'package'],
-  classes: ['lớp', 'class', 'yoga', 'boxing', 'dance', 'học', 'khóa học'],
-  trainers: ['trainer', 'pt', 'huấn luyện viên', 'personal trainer', 'coach'],
-  equipment: ['thiết bị', 'máy', 'tạ', 'dụng cụ', 'gym equipment'],
-  operating_hours: ['giờ', 'mở cửa', 'đóng cửa', 'thời gian', 'hoạt động'],
-  contact: ['liên hệ', 'địa chỉ', 'số điện thoại', 'email', 'hotline'],
-  policies: ['quy định', 'chính sách', 'policy', 'luật'],
-}
-
-// Detect category từ question
-const detectCategory = (question) => {
-  const questionLower = question.toLowerCase()
-
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (keywords.some((keyword) => questionLower.includes(keyword))) {
-      return category
-    }
-  }
-
-  return null
-}
-
-// Extract keywords for search
-const extractKeywords = (question) => {
-  return question
-    .toLowerCase()
-    .split(' ')
-    .filter((word) => word.length >= 2)
-    .filter((word) => !['là', 'của', 'có', 'gì', 'như', 'thế', 'nào', 'tôi', 'mình'].includes(word))
-}
-
-// Main FAQ Handler với enhanced routing
-export const handleFAQ = async (question, specificIntent = null) => {
+// Main FAQ handler
+export const handleFAQ = async (message, userId = null) => {
   try {
-    const result = await processFAQQuery(question, specificIntent)
+    // Import intent classifier
+    const { classifyIntent } = await import('./intent.classifier.js')
 
-    return {
-      success: true,
-      ...result,
+    const classification = classifyIntent(message)
+    const { specificIntent, faqCategory } = classification
+
+    console.log('FAQ Classification:', classification)
+
+    let response = null
+
+    switch (specificIntent) {
+      case 'general_question':
+        response = handleGeneralQuestion(message)
+        break
+
+      case 'gym_locations':
+        response = await handleLocations()
+        break
+
+      case 'gym_memberships':
+        response = await handleMemberships()
+        break
+
+      case 'gym_classes':
+        response = await handleClasses()
+        break
+
+      case 'gym_trainers':
+        response = await handleTrainers()
+        break
+
+      case 'gym_equipment':
+        response = await handleEquipment()
+        break
+
+      case 'basic_info':
+        response = handleBasicInfo(message)
+        break
+
+      default:
+        response = handleUnknown()
     }
+
+    return response
   } catch (error) {
-    console.error('FAQ Error:', error)
+    console.error('FAQ handler error:', error)
     return {
-      success: false,
-      content: 'Xin lỗi, tôi không thể trả lời câu hỏi này lúc này. Vui lòng liên hệ staff để được hỗ trợ.',
+      content: 'Xin lỗi, đã xảy ra lỗi hệ thống. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234',
       type: 'error',
     }
   }
 }
 
-const processFAQQuery = async (question, specificIntent = null) => {
-  // Nếu có specific intent từ classifier, thử direct response trước
-  if (specificIntent && specificIntent !== 'general_question') {
-    const directResult = await getDirectIntentResponse(specificIntent, question)
-    if (directResult) {
-      return directResult
-    }
-  }
-
-  const keywords = extractKeywords(question)
-  const category = detectCategory(question)
-
-  // LAYER 1: Static Knowledge Base (Exact match)
-  const staticResult = await searchStaticKnowledge(keywords, category)
-  if (staticResult) {
-    return staticResult
-  }
-
-  // LAYER 2: Dynamic Database Query (Real-time data)
-  const dynamicResult = await searchDynamicData(question, category, keywords)
-  if (dynamicResult) {
-    return dynamicResult
-  }
-
-  // LAYER 3: AI-Generated Answer với context
-  const aiResult = await generateAIAnswer(question, category)
-  return aiResult
-}
-
-// Direct response dựa trên specific intent từ classifier
-const getDirectIntentResponse = async (specificIntent, question) => {
-  try {
-    switch (specificIntent) {
-      case 'greeting':
-        return {
-          content: 'Xin chào! Tôi là trợ lý AI của gym. Bạn cần hỗ trợ gì?',
-          type: 'greeting',
-          source: 'direct',
-          confidence: 0.95,
-        }
-
-      case 'operating_hours':
-        return await getOperatingHours()
-
-      case 'contact':
-        return await getContactInfo()
-
-      case 'membership':
-        return await getMembershipInfo([])
-
-      case 'classes':
-        return await getClassInfo([])
-
-      case 'trainers':
-        return await getTrainerInfo([])
-
-      case 'equipment':
-        return await getEquipmentInfo([])
-
-      case 'policies':
-        return await getPolicyInfo([])
-
-      default:
-        return null
-    }
-  } catch (error) {
-    console.error('Direct intent response error:', error)
-    return null
-  }
-}
-
-const getOperatingHours = async () => {
-  return {
-    content: `GIỜ HOẠT ĐỘNG:\n\nThứ 2 - Thứ 6: 05:00 - 23:00\nThứ 7 - Chủ nhật: 06:00 - 22:00\n\nGym mở cửa tất cả các ngày trong tuần!`,
-    type: 'operating_hours',
-    source: 'direct',
-    confidence: 0.95,
-  }
-}
-
-const getPolicyInfo = async (keywords) => {
-  // Có thể tìm trong knowledge base hoặc return chung
-  return {
-    content: `QUY ĐỊNH GYM:\n\n• Tuân thủ giờ hoạt động\n• Mang theo thẻ thành viên\n• Giữ gìn vệ sinh chung\n• Không mang đồ ăn vào khu tập\n• Đặt dụng cụ về chỗ sau khi sử dụng\n\nLiên hệ staff để biết quy định chi tiết!`,
-    type: 'policies',
-    source: 'direct',
-    confidence: 0.8,
-  }
-}
-
-// LAYER 1: Search trong ChatBotKnowledgeBase + GymInfo
-const searchStaticKnowledge = async (keywords, category) => {
-  try {
-    // Tìm trong knowledge base trước
-    const knowledgeItems = await chatbotKnowledgeModel.searchKnowledge(keywords, category)
-
-    if (knowledgeItems.length > 0) {
-      const bestMatch = knowledgeItems[0]
-      return {
-        content: bestMatch.answer,
-        type: 'knowledge_base',
-        source: 'static',
-        category: bestMatch.category,
-        confidence: 0.9,
-      }
-    }
-
-    // Fallback tìm trong GymInfo
-    const gymInfoItems = await gymInfoModel.searchInfo(keywords.join(' '))
-    if (gymInfoItems.length > 0) {
-      const info = gymInfoItems[0]
-      return {
-        content: formatGymInfo(info),
-        type: 'gym_info',
-        source: 'static',
-        category: info.category,
-        confidence: 0.8,
-      }
-    }
-
-    return null
-  } catch (error) {
-    console.error('Static search error:', error)
-    return null
-  }
-}
-
-// LAYER 2: Dynamic database queries
-const searchDynamicData = async (question, category, keywords) => {
-  try {
-    switch (category) {
-      case 'membership':
-        return await getMembershipInfo(keywords)
-
-      case 'classes':
-        return await getClassInfo(keywords)
-
-      case 'trainers':
-        return await getTrainerInfo(keywords)
-
-      case 'equipment':
-        return await getEquipmentInfo(keywords)
-
-      case 'contact':
-        return await getContactInfo()
-
-      default:
-        return null
-    }
-  } catch (error) {
-    console.error('Dynamic search error:', error)
-    return null
-  }
-}
-
-// Dynamic Data Handlers
-const getMembershipInfo = async (keywords) => {
-  const allMemberships = await membershipModel.getListWithQuantityUser()
-
-  // Filter để loại bỏ membership inactive (_destroy: true)
-  const memberships = allMemberships.filter((membership) => !membership._destroy)
-
-  if (!memberships || memberships.length === 0) {
-    return null
-  }
-
-  let content = 'CÁC GÓI MEMBERSHIP HIỆN TẠI:\n\n'
-
-  memberships.forEach((membership, index) => {
-    content += `${index + 1}. ${membership.name}\n`
-    content += `   Giá: ${formatPrice(membership.price)}\n`
-    content += `   Thời hạn: ${membership.durationMonth} tháng\n`
-
-    if (membership.discount > 0) {
-      content += `   Giảm giá: ${membership.discount}%\n`
-    }
-
-    if (membership.features && membership.features.length > 0) {
-      content += `   Quyền lợi: ${membership.features.join(', ')}\n`
-    }
-
-    if (membership.totalUsers > 0) {
-      content += `   Số người đang sử dụng: ${membership.totalUsers}\n`
-    }
-
-    content += '\n'
-  })
-
-  content += 'Để đăng ký gói, vui lòng liên hệ staff hoặc đăng nhập để đăng ký online!'
-
-  return {
-    content,
-    type: 'membership_list',
-    source: 'dynamic',
-    category: 'membership',
-    confidence: 0.95,
-    data: memberships,
-  }
-}
-
-const getClassInfo = async (keywords) => {
-  let classes = []
-
-  // Lọc theo keywords nếu có
-  if (keywords.some((k) => ['yoga'].includes(k))) {
-    classes = await classModel.getClassesByType('YOGA')
-  } else if (keywords.some((k) => ['boxing', 'đấm bốc'].includes(k))) {
-    classes = await classModel.getClassesByType('BOXING')
-  } else if (keywords.some((k) => ['dance', 'nhảy'].includes(k))) {
-    classes = await classModel.getClassesByType('DANCE')
-  } else {
-    // Lấy tất cả classes (đã filter _destroy: false)
-    classes = await classModel.getList()
-  }
-
-  if (!classes || classes.length === 0) {
-    return {
-      content: 'Hiện tại không có lớp học nào phù hợp. Vui lòng liên hệ staff để biết thêm chi tiết!',
-      type: 'no_classes',
-      source: 'dynamic',
-      confidence: 0.8,
-    }
-  }
-
-  let content = 'CÁC LỚP HỌC HIỆN TẠI:\n\n'
-
-  classes.forEach((cls, index) => {
-    content += `${index + 1}. ${cls.name} (${cls.classType})\n`
-    content += `   Mô tả: ${cls.description}\n`
-    content += `   Sức chứa: ${cls.capacity} người\n`
-    content += `   Giá: ${formatPrice(cls.price)}\n`
-    content += `   Thời gian: ${formatDateRange(cls.startDate, cls.endDate)}\n`
-
-    if (cls.trainers && cls.trainers.length > 0) {
-      content += `   Số trainer: ${cls.trainers.length} người\n`
-    }
-
-    content += '\n'
-  })
-
-  content += 'Để xem lịch chi tiết và đăng ký, vui lòng đăng nhập!'
-
-  return {
-    content,
-    type: 'class_list',
-    source: 'dynamic',
-    category: 'classes',
-    confidence: 0.95,
-    data: classes,
-  }
-}
-
-const getTrainerInfo = async (keywords) => {
-  const trainers = await trainerModel.getListTrainerForUser()
-
-  if (!trainers || trainers.length === 0) {
-    return null
-  }
-
-  let content = 'DANH SÁCH TRAINER:\n\n'
-
-  trainers.forEach((trainer, index) => {
-    content += `${index + 1}. ${trainer.userInfo?.fullName || 'N/A'}\n`
-    content += `   Chuyên môn: ${trainer.trainerInfo?.specialization || 'N/A'}\n`
-    content += `   Giá/buổi: ${formatPrice(trainer.trainerInfo?.pricePerSession || 0)}\n`
-    content += `   Kinh nghiệm: ${trainer.trainerInfo?.experience || 'N/A'}\n`
-    content += `   Đánh giá: ${trainer.review?.rating || 0}/5 (${trainer.review?.totalBookings || 0} buổi đã dạy)\n`
-
-    if (trainer.trainerInfo?.bio) {
-      content += `   Giới thiệu: ${trainer.trainerInfo.bio.substring(0, 100)}...\n`
-    }
-
-    content += '\n'
-  })
-
-  content += 'Để đặt lịch với trainer, vui lòng đăng nhập và book lịch!'
-
-  return {
-    content,
-    type: 'trainer_list',
-    source: 'dynamic',
-    category: 'trainers',
-    confidence: 0.95,
-    data: trainers,
-  }
-}
-
-const getEquipmentInfo = async (keywords) => {
-  // Check if user is asking about specific muscle group
-  const muscleKeywords = {
-    ngực: 'chest',
-    vai: 'shoulders',
-    tay: 'arms',
-    lưng: 'back',
-    chân: 'legs',
-    bụng: 'abs',
-    mông: 'glutes',
-    cardio: 'cardio',
-    'tim mạch': 'cardio',
-  }
-
-  let targetMuscle = null
-  for (const [keyword, muscle] of Object.entries(muscleKeywords)) {
-    if (keywords.some((k) => k.includes(keyword))) {
-      targetMuscle = muscle
-      break
-    }
-  }
-
-  let equipment = []
-
-  if (targetMuscle) {
-    // Get equipment for specific muscle group
-    equipment = await equipmentModel.getEquipmentsByMuscleCategory(targetMuscle)
-  } else {
-    // Get all equipment grouped by muscle categories
-    const groupedEquipment = await equipmentModel.getEquipmentsGroupedByMuscleCategory()
-
-    if (!groupedEquipment || groupedEquipment.length === 0) {
-      return null
-    }
-
-    let content = 'THIẾT BỊ GYM THEO NHÓM CƠ:\n\n'
-
-    groupedEquipment.forEach((group) => {
-      const categoryLabel = getMuscleLabel(group._id)
-      content += `${categoryLabel.toUpperCase()} (${group.count} thiết bị):\n`
-
-      group.equipments.forEach((item) => {
-        content += `  • ${item.name} (${item.brand})`
-        if (item.status === 'maintenance') {
-          content += ' - Đang bảo trì'
-        } else if (item.status === 'broken') {
-          content += ' - Hỏng'
-        }
-        content += '\n'
-      })
-      content += '\n'
-    })
-
-    return {
-      content,
-      type: 'equipment_grouped',
-      source: 'dynamic',
-      category: 'equipment',
-      confidence: 0.95,
-      data: groupedEquipment,
-    }
-  }
-
-  if (!equipment || equipment.length === 0) {
-    return null
-  }
-
-  // For specific muscle group
-  const categoryLabel = getMuscleLabel(targetMuscle)
-  let content = `THIẾT BỊ TẬP ${categoryLabel.toUpperCase()}:\n\n`
-
-  equipment.forEach((item, index) => {
-    content += `${index + 1}. ${item.name} (${item.brand})`
-    if (item.status === 'maintenance') {
-      content += ' - Đang bảo trì'
-    } else if (item.status === 'broken') {
-      content += ' - Hỏng'
-    }
-    content += '\n'
-  })
-
-  return {
-    content,
-    type: 'equipment_by_muscle',
-    source: 'dynamic',
-    category: 'equipment',
-    confidence: 0.95,
-    data: equipment,
-  }
-}
-
-const getContactInfo = async () => {
-  const locations = await locationModel.getActiveLocations() // Sử dụng method mới
-
-  if (!locations || locations.length === 0) {
-    return null
-  }
-
-  let content = 'THÔNG TIN LIÊN HỆ:\n\n'
-
-  locations.forEach((location, index) => {
-    content += `${index + 1}. ${location.name}\n`
-    content += `   Địa chỉ: ${formatAddress(location.address)}\n`
-    content += `   Hotline: ${location.phone}\n\n`
-  })
-
-  return {
-    content,
-    type: 'contact_info',
-    source: 'dynamic',
-    category: 'contact',
-    confidence: 0.95,
-    data: locations,
-  }
-}
-
-// LAYER 3: AI-Generated Answer
-const generateAIAnswer = async (question, category) => {
-  try {
-    const { model } = initializeGeminiClient()
-
-    const context = await buildGymContext()
-
-    const prompt = `
-Bạn là trợ lý AI của phòng tập gym. Trả lời câu hỏi dựa trên thông tin sau:
-
-THÔNG TIN GYM:
-${context}
-
-CÂU HỎI: "${question}"
-CATEGORY: ${category || 'general'}
-
-QUY TẮC:
-- Trả lời bằng tiếng Việt
-- Ngắn gọn, rõ ràng
-- Nếu không biết, thừa nhận và đề xuất liên hệ staff
-- Khuyến khích người dùng đăng nhập để biết thêm chi tiết
-
-TRẢ LỜI:
-`
-
-    const result = await model.generateContent(prompt)
-    const content = result.response.text()
-
-    return {
-      content,
-      type: 'ai_generated',
-      source: 'ai',
-      category: category || 'general',
-      confidence: 0.7,
-    }
-  } catch (error) {
-    console.error('AI generation error:', error)
-    return {
-      content: 'Tôi không thể trả lời câu hỏi này. Vui lòng liên hệ staff để được hỗ trợ chi tiết nhất!',
-      type: 'fallback',
-      source: 'fallback',
-      confidence: 0.5,
-    }
-  }
-}
-
-// Utility Functions
-const buildGymContext = async () => {
-  // Build basic context về gym từ các bảng
-  const locations = await locationModel.getAllLocations()
-  const memberships = await membershipModel.getAllMemberships()
-
-  let context = ''
-
-  if (locations && locations.length > 0) {
-    context += 'CÁC CƠ SỞ:\n'
-    locations.forEach((loc) => {
-      context += `- ${loc.name}: ${formatAddress(loc.address)}, ${loc.phone}\n`
-    })
-    context += '\n'
-  }
-
-  if (memberships && memberships.length > 0) {
-    context += 'CÁC GÓI MEMBERSHIP:\n'
-    memberships.forEach((mem) => {
-      context += `- ${mem.name}: ${formatPrice(mem.price)}/${mem.durationMonth} tháng\n`
-    })
-  }
-
-  return context
-}
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-  }).format(price)
-}
-
-const formatAddress = (address) => {
-  if (typeof address === 'string') return address
-  if (typeof address === 'object') {
-    return `${address.street || ''}, ${address.district || ''}, ${address.city || ''}`.trim()
-  }
-  return 'N/A'
-}
-
-const getMuscleLabel = (muscleCategory) => {
-  const labels = {
-    chest: 'Ngực',
-    shoulders: 'Vai',
-    arms: 'Cánh tay',
-    biceps: 'Tay trước',
-    triceps: 'Tay sau',
-    back: 'Lưng',
-    lats: 'Cánh tay rộng',
-    abs: 'Bụng',
-    core: 'Cơ core',
-    obliques: 'Cơ bụng chéo',
-    legs: 'Chân',
-    quadriceps: 'Đùi trước',
-    hamstrings: 'Đùi sau',
-    glutes: 'Mông',
-    calves: 'Bắp chân',
-    full_body: 'Toàn thân',
-    cardio: 'Tim mạch',
-    forearms: 'Cẳng tay',
-    neck: 'Cổ',
-    flexibility: 'Độ dẻo dai',
-  }
-
-  return labels[muscleCategory] || muscleCategory
-}
-
-const formatDateRange = (startDate, endDate) => {
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('vi-VN', {
+// 1. General questions (non-gym)
+const handleGeneralQuestion = (message) => {
+  const messageLower = message.toLowerCase()
+
+  if (messageLower.includes('mấy giờ') || messageLower.includes('bây giờ')) {
+    const now = new Date()
+    const timeString = now.toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      weekday: 'long',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     })
-  }
-
-  return `${formatDate(start)} - ${formatDate(end)}`
-}
-
-const formatGymInfo = (info) => {
-  let content = `📋 ${info.key.toUpperCase()}:\n\n`
-
-  if (info.displayFormat === 'html') {
-    // Strip HTML tags for text response
-    content += info.value.replace(/<[^>]*>/g, '')
-  } else if (info.displayFormat === 'json') {
-    try {
-      const data = JSON.parse(info.value)
-      content += JSON.stringify(data, null, 2)
-    } catch {
-      content += info.value
+    return {
+      content: `⏰ Hiện tại là ${timeString}`,
+      type: 'time_response',
     }
-  } else {
-    content += info.value
   }
 
-  return content
+  if (messageLower.includes('cảm ơn') || messageLower.includes('thank')) {
+    return {
+      content: '😊 Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn!',
+      type: 'thanks_response',
+    }
+  }
+
+  if (messageLower.includes('chào') || messageLower.includes('hello') || messageLower.includes('hi')) {
+    return {
+      content: '👋 Chào bạn! Tôi là trợ lý AI của THE GYM. Bạn cần hỗ trợ gì?',
+      type: 'greeting_response',
+    }
+  }
+
+  return {
+    content: '🤖 Tôi chuyên hỗ trợ thông tin về THE GYM. Bạn có câu hỏi gì về phòng tập không?',
+    type: 'general_response',
+  }
 }
 
-export const faqService = {
-  handleFAQ,
-  detectCategory,
-  extractKeywords,
+// 2. Gym locations from database
+const handleLocations = async () => {
+  try {
+    const locations = await locationModel.getListLocation()
+
+    if (!locations || locations.length === 0) {
+      return {
+        content: 'Hiện tại không có thông tin cơ sở nào. Vui lòng liên hệ staff!\n\n📞 Hotline: 1900-1234',
+        type: 'no_locations_error',
+      }
+    }
+
+    const count = locations.length
+    const firstThree = locations.slice(0, 3)
+
+    let content = `🏢 THE GYM có ${count} cơ sở:\n\n`
+
+    firstThree.forEach((location, index) => {
+      content += `${index + 1}. ${location.name}\n`
+      if (location.address?.full) {
+        content += `   📍 ${location.address.full}\n`
+      }
+      content += '\n'
+    })
+
+    if (count > 3) {
+      content += `💡 Đăng nhập để xem ${count - 3} cơ sở còn lại!\n\n`
+    }
+
+    content += '📞 Hotline: 1900-1234'
+
+    return {
+      content,
+      type: 'locations_info',
+      data: { count, locations: firstThree },
+    }
+  } catch (error) {
+    console.error('Get locations error:', error)
+    return {
+      content: 'Xin lỗi, có lỗi khi tải thông tin cơ sở. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234',
+      type: 'locations_error',
+    }
+  }
 }
+
+// 3. Memberships from database
+const handleMemberships = async () => {
+  try {
+    const memberships = await membershipModel.getListWithQuantityUser()
+
+    if (!memberships || memberships.length === 0) {
+      return {
+        content: 'Hiện tại không có gói membership nào. Vui lòng liên hệ staff!\n\n📞 Hotline: 1900-1234',
+        type: 'no_memberships_error',
+      }
+    }
+
+    const count = memberships.length
+
+    let content = `💪 THE GYM có ${count} gói membership:\n\n`
+
+    memberships.slice(0, 3).forEach((membership, index) => {
+      content += `${index + 1}. ${membership.name}\n`
+      content += `   💰 ${formatPrice(membership.price)}/${membership.durationMonth} tháng\n`
+      if (membership.discount > 0) {
+        content += `   🎉 Giảm ${membership.discount}%\n`
+      }
+      content += '\n'
+    })
+
+    if (count > 3) {
+      content += `💡 Đăng nhập để xem chi tiết ${count - 3} gói còn lại!\n\n`
+    }
+
+    content += '📞 Tư vấn: 1900-1234'
+
+    return {
+      content,
+      type: 'memberships_info',
+      data: { count, memberships: memberships.slice(0, 3) },
+    }
+  } catch (error) {
+    console.error('Get memberships error:', error)
+    return {
+      content: 'Xin lỗi, có lỗi khi tải thông tin gói membership. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234',
+      type: 'memberships_error',
+    }
+  }
+}
+
+// 4. Classes from database - FIXED: Handle direct array response
+const handleClasses = async () => {
+  try {
+    const response = await classModel.getList()
+    console.log('🛠 Raw response from DB:', JSON.stringify(response, null, 2))
+
+    // ✅ FIXED: Response is direct array, not object with classes property
+    if (!response || !Array.isArray(response) || response.length === 0) {
+      return {
+        content:
+          'Hiện tại không có lớp học nào. Vui lòng liên hệ staff để biết thêm thông tin!\n\n📞 Hotline: 1900-1234',
+        type: 'no_classes_error',
+      }
+    }
+
+    const classes = response // ✅ FIXED: Direct array
+    const total = classes.length
+
+    console.log('🛠 Found', total, 'classes from database')
+
+    let content = `🏃‍♀️ THE GYM có ${total} lớp học:\n\n`
+
+    // Show first 4 classes
+    classes.slice(0, 4).forEach((classItem, index) => {
+      content += `${index + 1}. ${classItem.name}\n`
+
+      if (classItem.classType) {
+        content += `   🎯 Loại: ${getClassTypeDisplayName(classItem.classType)}\n`
+      }
+
+      if (classItem.description) {
+        content += `   📝 ${classItem.description}\n`
+      }
+
+      if (classItem.price) {
+        content += `   💰 ${formatPrice(classItem.price)}\n`
+      }
+
+      if (classItem.capacity) {
+        content += `   👥 Sức chứa: ${classItem.capacity} người\n`
+      }
+
+      // Parse recurrence for schedule
+      if (classItem.recurrence && classItem.recurrence.length > 0) {
+        const schedule = parseRecurrenceToSchedule(classItem.recurrence)
+        content += `   📅 ${schedule}\n`
+      }
+
+      content += '\n'
+    })
+
+    if (total > 4) {
+      content += `💡 Đăng nhập để xem ${total - 4} lớp còn lại!\n\n`
+    }
+
+    content += '📞 Đăng ký: 1900-1234'
+
+    return {
+      content,
+      type: 'classes_info',
+      data: {
+        totalClasses: total,
+        classes: classes.slice(0, 4),
+      },
+    }
+  } catch (error) {
+    console.error('🛠 Get classes error:', error)
+    return {
+      content: 'Xin lỗi, có lỗi khi tải thông tin lớp học. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234',
+      type: 'classes_error',
+    }
+  }
+}
+
+// 5. Trainers from database
+const handleTrainers = async () => {
+  try {
+    const trainers = await trainerModel.getListTrainerForUser()
+
+    if (!trainers || trainers.length === 0) {
+      return {
+        content: 'Hiện tại không có trainer nào. Vui lòng liên hệ staff!\n\n📞 Hotline: 1900-1234',
+        type: 'no_trainers_error',
+      }
+    }
+
+    const count = trainers.length
+
+    let content = `👨‍💪 THE GYM có ${count} trainer:\n\n`
+
+    trainers.slice(0, 3).forEach((trainer, index) => {
+      content += `${index + 1}. ${trainer.fullName || 'Trainer'}\n`
+      if (trainer.specialization?.length > 0) {
+        content += `   🎯 ${trainer.specialization.slice(0, 2).join(', ')}\n`
+      }
+      if (trainer.experience) {
+        content += `   📈 ${trainer.experience} năm kinh nghiệm\n`
+      }
+      content += '\n'
+    })
+
+    if (count > 3) {
+      content += `💡 Đăng nhập để xem ${count - 3} trainer còn lại!\n\n`
+    }
+
+    content += '📞 Đặt lịch: 1900-1234'
+
+    return {
+      content,
+      type: 'trainers_info',
+      data: { count, trainers: trainers.slice(0, 3) },
+    }
+  } catch (error) {
+    console.error('Get trainers error:', error)
+    return {
+      content: 'Xin lỗi, có lỗi khi tải thông tin trainer. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234',
+      type: 'trainers_error',
+    }
+  }
+}
+
+// 6. Equipment - enhanced with quantity info
+const handleEquipment = async (message) => {
+  return {
+    content: `🏋️ THIẾT BỊ THE GYM:\n\n📍 Ở mỗi cơ sở sẽ có nhiều loại thiết bị khác nhau.\n\nBạn hãy đăng nhập và vào mục hệ thống phòng tập để xem từng thiết bị nhé!\n\n📞 Hỗ trợ: 1900-1234`,
+    type: 'equipment_info',
+  }
+}
+
+// 7. Basic info
+const handleBasicInfo = (message) => {
+  if (message.includes('mở cửa') || message.includes('giờ')) {
+    return {
+      content: '⏰ GIỜ MỞ CỬA:\n\n📅 Thứ 2 - Chủ nhật\n🕕 06:00 - 22:00\n\n📞 Hotline: 1900-1234',
+      type: 'hours_info',
+    }
+  }
+
+  if (message.includes('liên hệ') || message.includes('hotline')) {
+    return {
+      content:
+        '📞 LIÊN HỆ THE GYM:\n\n📱 Hotline: 1900-1234\n📧 Email: info@thegym.vn\n🌐 Website: www.thegym.vn\n📍 Địa chỉ: Xem danh sách cơ sở',
+      type: 'contact_info',
+    }
+  }
+
+  return {
+    content:
+      '🏋️ THE GYM - Phòng tập hiện đại\n\n⏰ Mở cửa: 06:00-22:00\n📞 Hotline: 1900-1234\n💪 Tập luyện chuyên nghiệp!',
+    type: 'basic_info',
+  }
+}
+
+const handleUnknown = () => {
+  return {
+    content:
+      '🤔 Tôi chưa hiểu câu hỏi của bạn.\n\nBạn có thể hỏi về:\n• Cơ sở gym\n• Gói membership\n• Lớp học\n• Trainer\n• Thiết bị\n• Giờ mở cửa\n\nHoặc nói "xin chào" để bắt đầu!',
+    type: 'unknown',
+  }
+}
+
+// Helper function to get display name for class types
+const getClassTypeDisplayName = (type) => {
+  const typeMap = {
+    yoga: 'Yoga',
+    dance: 'Dance',
+    boxing: 'Boxing',
+    cardio: 'Cardio',
+    strength: 'Strength Training',
+    aerobic: 'Aerobic',
+    pilates: 'Pilates',
+    zumba: 'Zumba',
+    crossfit: 'CrossFit',
+    spinning: 'Spinning',
+    other: 'Khác',
+  }
+  return typeMap[type.toLowerCase()] || type
+}
+
+// Helper function to parse recurrence to readable schedule
+const parseRecurrenceToSchedule = (recurrence) => {
+  if (!recurrence || recurrence.length === 0) return ''
+
+  const dayNames = {
+    0: 'Chủ nhật',
+    1: 'Thứ 2',
+    2: 'Thứ 3',
+    3: 'Thứ 4',
+    4: 'Thứ 5',
+    5: 'Thứ 6',
+    6: 'Thứ 7',
+  }
+
+  const schedules = recurrence.map((rec) => {
+    const day = dayNames[rec.dayOfWeek] || `Ngày ${rec.dayOfWeek}`
+    const startTime = `${rec.startTime.hour}:${rec.startTime.minute.toString().padStart(2, '0')}`
+    const endTime = `${rec.endTime.hour}:${rec.endTime.minute.toString().padStart(2, '0')}`
+    return `${day}: ${startTime}-${endTime}`
+  })
+
+  return schedules.join(', ')
+}
+
+export default { handleFAQ }

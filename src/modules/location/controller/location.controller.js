@@ -6,7 +6,7 @@ const createNew = async (req, res, next) => {
     const result = await locationService.createNew(req)
 
     if (result.success) {
-      res.status(StatusCodes.OK).json(result)
+      res.status(StatusCodes.CREATED).json(result)
     } else {
       res.status(StatusCodes.BAD_REQUEST).json(result)
     }
@@ -28,10 +28,26 @@ const getListLocation = async (req, res, next) => {
   }
 }
 
+const getListLocationForAdmin = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+
+    const result = await locationService.getListLocationForAdmin(page, limit)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 const updateInfo = async (req, res, next) => {
   try {
     const locationId = req.params.id
-    const result = await locationService.updateInfo(locationId, req.body)
+    const result = await locationService.updateInfo(locationId, req)
     if (result.success) {
       res.status(StatusCodes.OK).json(result)
     } else {
@@ -44,8 +60,8 @@ const updateInfo = async (req, res, next) => {
 
 const deleteLocation = async (req, res, next) => {
   try {
-    const userId = req.params.id
-    const result = await locationService.deleteLocation(userId)
+    const locationId = req.params.id
+    const result = await locationService.deleteLocation(locationId)
     if (result.success) {
       res.status(StatusCodes.OK).json(result)
     } else {
@@ -59,6 +75,7 @@ const deleteLocation = async (req, res, next) => {
 export const locationController = {
   createNew,
   getListLocation,
+  getListLocationForAdmin,
   updateInfo,
   deleteLocation,
 }
