@@ -1,4 +1,5 @@
 import { userModel } from '~/modules/user/model/user.model.js'
+import { handleHashedPassword } from '~/utils/bcrypt'
 import { sanitize } from '~/utils/utils'
 
 const createNew = async (reqBody) => {
@@ -45,6 +46,40 @@ const updateInfo = async (userId, data) => {
       user: {
         ...sanitize(result),
       },
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const resetPassword = async (reqBody) => {
+  try {
+    const { phone, plainPassword } = reqBody
+    console.log('🚀 ~ resetPassword ~ plainPassword:', plainPassword)
+    console.log('🚀 ~ resetPassword ~ phone:', phone)
+    // check existing user
+    const existingUser = await userModel.getDetailByPhone(phone)
+    if (existingUser === null) {
+      return {
+        success: false,
+        message: 'User not found',
+      }
+    }
+    const { _id } = existingUser
+
+    const password = await handleHashedPassword(plainPassword)
+
+    const updateData = {
+      password,
+      updatedAt: Date.now(),
+    }
+    const result = await userModel.updateInfo(_id, updateData)
+    console.log('🚀 ~ updateInfo ~ result:', result)
+
+    // update user
+    return {
+      success: true,
+      message: 'Password updated successfully',
     }
   } catch (error) {
     throw new Error(error)
@@ -124,6 +159,7 @@ export const userService = {
   createNew,
   getDetail,
   updateInfo,
+  resetPassword,
   getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
   softDeleteUser, // NEW

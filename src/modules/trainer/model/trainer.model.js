@@ -22,7 +22,7 @@ const TRAINER_COLLECTION_SCHEMA = Joi.object({
   approvedAt: Joi.string().isoDate().allow('').default(''),
   experience: Joi.string().trim().strict().default(''),
   education: Joi.string().trim().strict().default(''),
-  pricePerSession: Joi.number().min(0).default(0),
+  pricePerHour: Joi.number().min(0).default(0),
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
@@ -218,7 +218,7 @@ const getListTrainerForUser = async () => {
               bio: '$bio',
               experience: '$experience',
               education: '$education',
-              pricePerSession: '$pricePerSession',
+              pricePerHour: '$pricePerHour',
               physiqueImages: '$physiqueImages',
             },
             schedule: {
@@ -580,7 +580,7 @@ const getListTrainerForAdmin = async () => {
               approvedAt: '$approvedAt',
               experience: '$experience',
               education: '$education',
-              pricePerSession: '$pricePerSession',
+              pricePerHour: '$pricePerHour',
             },
             totalBookings: '$totalBookings',
             rating: '$rating',

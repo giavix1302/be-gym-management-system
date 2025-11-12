@@ -334,9 +334,74 @@ const refresh = async (refreshToken) => {
   }
 }
 
+// forgot password
+const forgotPasswordSentOTP = async (reqBody) => {
+  try {
+    const { phone } = reqBody
+    const existingUser = await userModel.getDetailByPhone(phone)
+
+    if (!existingUser) {
+      return { success: false, message: 'The user does not exist.' }
+    }
+
+    // Production → gửi OTP qua Twilio
+    if (process.env.NODE_ENV === 'production') {
+      const result = await sendOtpService(phone)
+      if (!result.success) return { success: false, message: result.message }
+      return { success: true, message: 'The OTP code has been sent' }
+    }
+
+    // Dev → bypass OTP
+    if (process.env.NODE_ENV === 'development') {
+      return { success: true, message: 'The OTP code has been sent' }
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const forgotPasswordVerifyOTP = async (reqBody) => {
+  try {
+    const { phone, code } = reqBody
+
+    // Validate required fields
+    if (!phone || !code) {
+      return {
+        success: false,
+        message: 'Phone number and OTP code are required',
+      }
+    }
+
+    // Validate OTP
+    const otpResult = await validateOTP(phone, code)
+    if (!otpResult.success) {
+      return {
+        success: false,
+        message: otpResult.message,
+      }
+    }
+
+    return {
+      success: true,
+      message: 'OTP verified successfully.',
+    }
+  } catch (error) {
+    console.error('❌ Verify function error:', error)
+
+    // Return structured error response
+    return {
+      success: false,
+      message: 'An error occurred during account verification. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    }
+  }
+}
+
 export const authService = {
   login,
   signup,
   verify,
   refresh,
+  forgotPasswordSentOTP,
+  forgotPasswordVerifyOTP,
 }

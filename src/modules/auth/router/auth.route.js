@@ -16,4 +16,7 @@ Router.route('/refresh').post(authController.refreshToken)
 // Logout (xóa refresh token)
 Router.route('/logout').post(authController.logout)
 
+Router.route('/forgot-password/sent-opt').post(authController.forgotPasswordSentOTP)
+Router.route('/forgot-password/verify').post(authController.forgotPasswordVerifyOTP)
+
 export const authRoute = Router

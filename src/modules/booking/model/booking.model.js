@@ -235,7 +235,7 @@ const getUpcomingBookingsByUserId = async (userId) => {
               },
               specialization: '$trainer.specialization',
               rating: '$trainer.rating',
-              pricePerSession: '$trainer.pricePerSession',
+              pricePerHour: '$trainer.pricePerHour',
             },
             allSessions: 1,
           },
@@ -328,7 +328,7 @@ const getUpcomingBookingsByUserIdSimple = async (userId) => {
               fullName: '$trainerUser.fullName',
               avatar: '$trainerUser.avatar',
               specialization: '$trainer.specialization',
-              pricePerSession: '$trainer.pricePerSession',
+              pricePerHour: '$trainer.pricePerHour',
             },
             location: {
               _id: '$location._id',
@@ -933,7 +933,7 @@ const getUpcomingBookingsForReminder = async (minutesBefore) => {
               _id: '$trainer._id',
               userId: '$trainer.userId',
               specialization: '$trainer.specialization',
-              pricePerSession: '$trainer.pricePerSession',
+              pricePerHour: '$trainer.pricePerHour',
             },
             trainerUser: {
               _id: '$trainerUser._id',
@@ -969,7 +969,110 @@ const getUpcomingBookingsForReminder = async (minutesBefore) => {
   }
 }
 
-// Export thêm method mới
+const getBookingsToUpdateStatus = async () => {
+  try {
+    const now = new Date()
+
+    const bookingsToUpdate = await GET_DB()
+      .collection(BOOKING_COLLECTION_NAME)
+      .aggregate([
+        // Match bookings có status "booking"
+        {
+          $match: {
+            status: BOOKING_STATUS.BOOKING, // 'booking'
+            _destroy: false,
+          },
+        },
+        // Join với schedules để lấy endTime
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        // Filter booking có endTime đã qua
+        {
+          $match: {
+            $expr: {
+              $lt: [{ $dateFromString: { dateString: '$schedule.endTime' } }, now],
+            },
+            'schedule._destroy': false,
+          },
+        },
+        // Project thông tin cần thiết
+        {
+          $project: {
+            _id: 1,
+            userId: 1,
+            scheduleId: 1,
+            status: 1,
+            endTime: '$schedule.endTime',
+            startTime: '$schedule.startTime',
+          },
+        },
+      ])
+      .toArray()
+
+    return bookingsToUpdate
+  } catch (error) {
+    throw new Error(`Error getting bookings to update status: ${error.message}`)
+  }
+}
+
+// Hàm update nhiều booking status cùng lúc
+const updateMultipleBookingStatus = async (bookingIds, newStatus) => {
+  try {
+    const result = await GET_DB()
+      .collection(BOOKING_COLLECTION_NAME)
+      .updateMany(
+        {
+          _id: { $in: bookingIds.map((id) => new ObjectId(String(id))) },
+        },
+        {
+          $set: {
+            status: newStatus,
+            updatedAt: new Date(),
+          },
+        }
+      )
+
+    return {
+      modifiedCount: result.modifiedCount,
+      matchedCount: result.matchedCount,
+    }
+  } catch (error) {
+    throw new Error(`Error updating multiple booking status: ${error.message}`)
+  }
+}
+
+// Hàm update single booking status (đã có updateInfo nhưng này chuyên dụng hơn)
+const updateBookingStatus = async (bookingId, newStatus) => {
+  try {
+    const result = await GET_DB()
+      .collection(BOOKING_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(String(bookingId)) },
+        {
+          $set: {
+            status: newStatus,
+            updatedAt: new Date(),
+          },
+        },
+        { returnDocument: 'after' }
+      )
+
+    return result.value
+  } catch (error) {
+    throw new Error(`Error updating booking status: ${error.message}`)
+  }
+}
+
+// Cập nhật export để include các hàm mới:
 export const bookingModel = {
   BOOKING_COLLECTION_NAME,
   BOOKING_COLLECTION_SCHEMA,
@@ -985,5 +1088,9 @@ export const bookingModel = {
   softDeleteBooking,
   checkUserBookingConflict,
   getBookingsByTrainerId,
-  getUpcomingBookingsForReminder, // Method mới
+  getUpcomingBookingsForReminder,
+
+  getBookingsToUpdateStatus, // Lấy bookings cần update status
+  updateMultipleBookingStatus, // Update nhiều bookings cùng lúc
+  updateBookingStatus, // Update single booking status
 }

@@ -35,6 +35,19 @@ const updateInfo = async (req, res, next) => {
   }
 }
 
+const resetPassword = async (req, res, next) => {
+  try {
+    const result = await userService.resetPassword(req.body)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.NOT_FOUND).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 // NEW: Lấy danh sách user cho admin
 const getListUserForAdmin = async (req, res, next) => {
   try {
@@ -124,6 +137,7 @@ export const userController = {
   createNew,
   getDetail,
   updateInfo,
+  resetPassword,
   getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
   softDeleteUser, // NEW

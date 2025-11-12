@@ -100,10 +100,40 @@ const logout = async (req, res, next) => {
   }
 }
 
+const forgotPasswordSentOTP = async (req, res, next) => {
+  try {
+    const result = await authService.forgotPasswordSentOTP(req.body)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+const forgotPasswordVerifyOTP = async (req, res, next) => {
+  try {
+    const result = await authService.forgotPasswordVerifyOTP(req.body)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const authController = {
   login,
   signup,
   verify,
   refreshToken,
   logout,
+  forgotPasswordSentOTP,
+  forgotPasswordVerifyOTP,
 }

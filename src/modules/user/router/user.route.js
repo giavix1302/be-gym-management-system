@@ -12,6 +12,9 @@ Router.route('/').post(userController.createNew)
 
 Router.route('/:id').get(userController.getDetail).put(userValidation.updateInfo, userController.updateInfo)
 
+// no auth
+Router.route('/reset-password').post(userController.resetPassword)
+
 // NEW: Routes cho admin
 // GET /users/admin/list?page=1&limit=20
 Router.route('/admin/list').get(userController.getListUserForAdmin)
