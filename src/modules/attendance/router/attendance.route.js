@@ -18,6 +18,9 @@ Router.get('/active/:userId', attendanceController.getActiveAttendance)
 // Lấy lịch sử attendance của user
 Router.get('/history/:userId', attendanceController.getUserHistory)
 
+// NEW: Lấy danh sách attendance với phân trang
+Router.get('/list/:userId', attendanceController.getListAttendanceByUserId)
+
 // Lấy danh sách attendances theo location (cho admin)
 Router.get('/location/:locationId', attendanceController.getLocationAttendances)
 

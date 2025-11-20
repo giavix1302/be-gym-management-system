@@ -10,6 +10,7 @@ import { STATUS_TYPE } from '~/utils/constants'
 import { cloudinary } from '~/config/cloudinary.config'
 import QRCode from 'qrcode'
 import { staffModel } from '~/modules/staff/model/staff.model'
+import { staffShiftModel } from '~/modules/staff/model/staffShift.model'
 
 const login = async (reqBody) => {
   try {
@@ -103,6 +104,11 @@ const login = async (reqBody) => {
     if (account.role === 'staff') {
       // lấy thông tin staff
       const staff = await staffModel.getDetailByUserId(account._id)
+
+      // await staffShiftModel.createNew({
+      //   staffId: staff._id.toString(),
+      //   checkinTime: new Date().toISOString(),
+      // })
 
       const { locationInfo, userInfo, ...staffInfo } = staff
 

@@ -33,13 +33,16 @@ const createNew = async (req) => {
       endTime,
     }
 
-    await scheduleModel.createNew(dataToCreate)
+    const newSchedule = await scheduleModel.createNew(dataToCreate)
+
+    const getNewSchedule = await scheduleModel.getDetailById(newSchedule.insertedId)
 
     const listSchedule = await scheduleModel.getListScheduleByTrainerId(trainerId)
 
     return {
       success: true,
       message: 'schedule created successfully',
+      newSchedule: getNewSchedule,
       listSchedule,
     }
   } catch (error) {

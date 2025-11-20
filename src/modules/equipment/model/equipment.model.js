@@ -308,6 +308,22 @@ const searchEquipments = async (searchTerm) => {
   }
 }
 
+// NEW: Tính tổng số thiết bị đang bị hỏng
+const getTotalBrokenEquipments = async () => {
+  try {
+    const totalBrokenEquipments = await GET_DB()
+      .collection(EQUIPMENT_COLLECTION_NAME)
+      .countDocuments({
+        _destroy: { $ne: true },
+        status: EQUIPMENT_STATUS.BROKEN,
+      })
+
+    return totalBrokenEquipments
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const equipmentModel = {
   EQUIPMENT_COLLECTION_NAME,
   EQUIPMENT_COLLECTION_SCHEMA,
@@ -325,4 +341,6 @@ export const equipmentModel = {
   deleteMaintenanceRecord,
   softDeleteEquipment,
   searchEquipments,
+
+  getTotalBrokenEquipments,
 }

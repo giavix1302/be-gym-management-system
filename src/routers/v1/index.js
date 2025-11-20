@@ -21,6 +21,7 @@ import { conversationRoute } from '~/modules/conversation/router/conversation.ro
 import { chatbotRoute } from '~/modules/chatbot/router/chatbot.route'
 import { notificationRoute } from '~/modules/notification/router/notification.route'
 import { staffRoute } from '~/modules/staff/router/staff.route'
+import { statisticsRoute } from '~/modules/statistics/router/statistics.route'
 
 const Router = express.Router()
 
@@ -72,5 +73,7 @@ Router.use('/chatbot', chatbotRoute)
 Router.use('/notifications', notificationRoute)
 
 Router.use('/staffs', staffRoute)
+
+Router.use('/statistics', statisticsRoute)
 
 export const APIs_V1 = Router

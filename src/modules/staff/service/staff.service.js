@@ -2,6 +2,7 @@ import { STATUS_TYPE, USER_TYPES } from '~/utils/constants'
 import { staffModel } from '../model/staff.model'
 import { userModel } from '~/modules/user/model/user.model'
 import { sendOtpService, verifyOtp } from '~/utils/twilio'
+import { staffShiftModel } from '../model/staffShift.model'
 
 const signupForStaff = async (reqBody) => {
   try {
@@ -240,6 +241,41 @@ const hardDeleteStaff = async (staffId) => {
   }
 }
 
+const handleLogoutStaff = async (staffId) => {
+  try {
+    const staffInfo = await staffShiftModel.getDetailByStaffId(staffId)
+    console.log('🚀 ~ handleLogoutStaff ~ staffInfo:', staffInfo)
+
+    if (!staffInfo) {
+      return { success: false, message: 'Staff shift not found!' }
+    }
+
+    const { checkinTime } = staffInfo
+
+    const checkoutTime = new Date()
+    const checkin = new Date(checkinTime)
+
+    // 👉 Tính số giờ làm
+    const diffMs = checkoutTime - checkin
+    const hours = (diffMs / (1000 * 60 * 60)).toFixed(2) // dạng "1.75"
+
+    const result = await staffShiftModel.updateInfo(staffId, {
+      checkoutTime: checkoutTime.toISOString(),
+      hours: parseFloat(hours), // convert lại thành số 1.75
+      updatedAt: Date.now(),
+    })
+    console.log('🚀 ~ handleLogoutStaff ~ result:', result)
+
+    return {
+      success: result !== null,
+      message: result !== null ? 'Staff logged out!' : 'Failed to logout staff!',
+      hours: parseFloat(hours),
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const staffService = {
   signupForStaff,
   verifyForStaff,
@@ -248,4 +284,5 @@ export const staffService = {
   updateStaff,
   deleteStaff,
   hardDeleteStaff,
+  handleLogoutStaff,
 }

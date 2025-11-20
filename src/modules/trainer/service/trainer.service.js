@@ -2,6 +2,7 @@
 import { sanitize, updateImages } from '~/utils/utils'
 import { trainerModel } from '../model/trainer.model'
 import { userModel } from '~/modules/user/model/user.model'
+import { bookingModel } from '~/modules/booking/model/booking.model' // Import booking model
 import { deleteImageByUrl } from '~/config/cloudinary.config'
 import { STATUS_TYPE } from '~/utils/constants'
 
@@ -175,7 +176,7 @@ const updateInfo = async (userId, req) => {
 
     if (isKeepAll) {
       /**
-       * CASE: Giữ nguyên - physiqueImagesHold giống hệt physiqueImagesInDatabase
+       * CASE: Giữ nguyên - physiqueImagesHold giống hết physiqueImagesInDatabase
        * Không cập nhật field physiqueImages để tránh trigger không cần thiết
        */
       console.log('📸 Keep all current images - no changes needed')
@@ -234,6 +235,131 @@ const updateInfo = async (userId, req) => {
   }
 }
 
+// Hàm mới để lấy danh sách booking completed của trainer
+const getListBookingByTrainerId = async (userId, query) => {
+  try {
+    // Lấy page và limit từ query parameters
+    const page = parseInt(query.page) || 1
+    const limit = parseInt(query.limit) || 10
+
+    // Validate page và limit
+    if (page < 1) {
+      return {
+        success: false,
+        message: 'Page must be greater than 0',
+      }
+    }
+
+    if (limit < 1 || limit > 100) {
+      return {
+        success: false,
+        message: 'Limit must be between 1 and 100',
+      }
+    }
+
+    // Kiểm tra xem user có tồn tại không
+    const existingUser = await userModel.getDetailById(userId)
+    if (!existingUser) {
+      return {
+        success: false,
+        message: 'User not found',
+      }
+    }
+
+    // Lấy thông tin trainer từ userId
+    const trainer = await trainerModel.getDetailByUserId(userId)
+    if (!trainer) {
+      return {
+        success: false,
+        message: 'Trainer not found',
+      }
+    }
+
+    // Lấy danh sách booking của trainer với phân trang
+    const result = await trainerModel.getListBookingByTrainerId(trainer._id, page, limit)
+
+    return {
+      success: true,
+      message: 'List booking retrieved successfully',
+      data: result.data,
+      pagination: result.pagination,
+    }
+  } catch (error) {
+    console.error('Error in getListBookingByTrainerId service:', error)
+    throw new Error(error.message || 'Internal server error')
+  }
+}
+
+// Hàm mới để lấy thống kê dashboard cho trainer
+const getTrainerDashboardStatsByUserId = async (userId) => {
+  try {
+    // Kiểm tra xem user có tồn tại không
+    const existingUser = await userModel.getDetailById(userId)
+    if (!existingUser) {
+      return {
+        success: false,
+        message: 'User not found',
+      }
+    }
+
+    // Kiểm tra xem user có phải trainer không
+    const trainer = await trainerModel.getDetailByUserId(userId)
+    if (!trainer) {
+      return {
+        success: false,
+        message: 'Trainer not found',
+      }
+    }
+
+    // Lấy thống kê dashboard
+    const stats = await trainerModel.getTrainerDashboardStatsByUserId(userId)
+
+    return {
+      success: true,
+      message: 'Dashboard stats retrieved successfully',
+      stats,
+    }
+  } catch (error) {
+    console.error('Error in getTrainerDashboardStatsByUserId service:', error)
+    throw new Error(error.message || 'Internal server error')
+  }
+}
+
+const getTrainerEventsForThreeMonths = async (userId) => {
+  try {
+    // Kiểm tra xem user có tồn tại không
+    const existingUser = await userModel.getDetailById(userId)
+    if (!existingUser) {
+      return {
+        success: false,
+        message: 'User not found',
+      }
+    }
+
+    // Kiểm tra xem user có phải trainer không
+    const trainer = await trainerModel.getDetailByUserId(userId)
+    if (!trainer) {
+      return {
+        success: false,
+        message: 'Trainer not found',
+      }
+    }
+
+    // Lấy events của trainer trong 3 tháng
+    const events = await trainerModel.getTrainerEventsForThreeMonths(userId)
+
+    return {
+      success: true,
+      message: 'Trainer events retrieved successfully',
+      events,
+    }
+  } catch (error) {
+    console.error('Error in getTrainerEventsForThreeMonths service:', error)
+    throw new Error(error.message || 'Internal server error')
+  }
+}
+
+// Thêm vào export
 export const trainerService = {
   createNew,
   getDetailByUserId,
@@ -241,4 +367,7 @@ export const trainerService = {
   getListTrainerForAdmin,
   updateInfo,
   updateIsApproved,
+  getListBookingByTrainerId,
+  getTrainerDashboardStatsByUserId,
+  getTrainerEventsForThreeMonths, // Thêm function mới
 }

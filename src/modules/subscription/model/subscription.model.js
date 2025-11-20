@@ -259,6 +259,189 @@ const restoreSubscription = async (subId) => {
   }
 }
 
+// NEW: Tính tổng số subscription sắp hết hạn trong 7 ngày
+const getSubscriptionsExpiringIn7Days = async () => {
+  try {
+    const now = new Date()
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 ngày sau
+
+    const expiringSubscriptions = await GET_DB()
+      .collection(SUBSCRIPTION_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+            status: SUBSCRIPTION_STATUS.ACTIVE,
+            // Subscription có endDate trong khoảng từ hôm nay đến 7 ngày nữa
+            endDate: {
+              $gte: now.toISOString(),
+              $lte: sevenDaysFromNow.toISOString(),
+            },
+          },
+        },
+        // Join với users để lấy thông tin user
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        {
+          $unwind: { path: '$user', preserveNullAndEmptyArrays: true },
+        },
+        // Join với memberships để lấy thông tin gói
+        {
+          $lookup: {
+            from: 'memberships',
+            localField: 'membershipId',
+            foreignField: '_id',
+            as: 'membership',
+          },
+        },
+        {
+          $unwind: { path: '$membership', preserveNullAndEmptyArrays: true },
+        },
+        // Tính số ngày còn lại
+        {
+          $addFields: {
+            daysRemaining: {
+              $ceil: {
+                $divide: [
+                  {
+                    $subtract: [{ $dateFromString: { dateString: '$endDate' } }, now],
+                  },
+                  1000 * 60 * 60 * 24, // Convert to days
+                ],
+              },
+            },
+          },
+        },
+        // Project thông tin cần thiết
+        {
+          $project: {
+            subscriptionId: '$_id',
+            userId: '$userId',
+            userName: { $ifNull: ['$user.fullName', 'Unknown User'] },
+            userEmail: { $ifNull: ['$user.email', ''] },
+            userPhone: { $ifNull: ['$user.phone', ''] },
+            membershipName: { $ifNull: ['$membership.name', 'Unknown Package'] },
+            startDate: '$startDate',
+            endDate: '$endDate',
+            daysRemaining: '$daysRemaining',
+            paymentStatus: '$paymentStatus',
+            remainingSessions: '$remainingSessions',
+          },
+        },
+        // Sắp xếp theo số ngày còn lại (ít nhất trước)
+        {
+          $sort: { daysRemaining: 1 },
+        },
+      ])
+      .toArray()
+
+    return {
+      totalExpiring: expiringSubscriptions.length,
+      subscriptions: expiringSubscriptions,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// NEW: Chỉ lấy số lượng (không lấy chi tiết)
+const getTotalSubscriptionsExpiringIn7Days = async () => {
+  try {
+    const now = new Date()
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+    const count = await GET_DB()
+      .collection(SUBSCRIPTION_COLLECTION_NAME)
+      .countDocuments({
+        _destroy: false,
+        status: SUBSCRIPTION_STATUS.ACTIVE,
+        endDate: {
+          $gte: now.toISOString(),
+          $lte: sevenDaysFromNow.toISOString(),
+        },
+      })
+
+    return count
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// NEW: Lấy subscription sắp hết hạn theo khoảng thời gian tùy chỉnh
+const getSubscriptionsExpiringInDays = async (days = 7) => {
+  try {
+    const now = new Date()
+    const targetDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+
+    const result = await GET_DB()
+      .collection(SUBSCRIPTION_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+            status: SUBSCRIPTION_STATUS.ACTIVE,
+            endDate: {
+              $gte: now.toISOString(),
+              $lte: targetDate.toISOString(),
+            },
+          },
+        },
+        // Group theo số ngày còn lại
+        {
+          $addFields: {
+            daysRemaining: {
+              $ceil: {
+                $divide: [
+                  {
+                    $subtract: [{ $dateFromString: { dateString: '$endDate' } }, now],
+                  },
+                  1000 * 60 * 60 * 24,
+                ],
+              },
+            },
+          },
+        },
+        {
+          $group: {
+            _id: '$daysRemaining',
+            count: { $sum: 1 },
+            subscriptions: { $push: '$$ROOT' },
+          },
+        },
+        {
+          $sort: { _id: 1 }, // Sort by days remaining
+        },
+      ])
+      .toArray()
+
+    const summary = {
+      totalExpiring: 0,
+      byDays: {},
+      totalCount: 0,
+    }
+
+    result.forEach((item) => {
+      summary.byDays[item._id] = {
+        daysRemaining: item._id,
+        count: item.count,
+      }
+      summary.totalCount += item.count
+    })
+
+    summary.totalExpiring = summary.totalCount
+
+    return summary
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 // Export tất cả các methods
 export const subscriptionModel = {
   SUBSCRIPTION_COLLECTION_NAME,
@@ -276,4 +459,7 @@ export const subscriptionModel = {
   getSubscriptionsByUserId, // NEW
   getActiveSubscriptionByUserId, // NEW
   restoreSubscription, // NEW
+
+  getTotalSubscriptionsExpiringIn7Days,
+  getSubscriptionsExpiringInDays,
 }

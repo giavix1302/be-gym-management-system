@@ -230,6 +230,97 @@ const createUniqueIndex = async () => {
   }
 }
 
+/**
+ * Lấy danh sách attendance của một user với pagination
+ * @param {string} userId - ObjectId của user
+ * @param {object} options - Các tùy chọn query
+ * @param {string} options.startDate - Ngày bắt đầu (ISO string)
+ * @param {string} options.endDate - Ngày kết thúc (ISO string)
+ * @param {number} options.page - Số trang hiện tại (default: 1)
+ * @param {number} options.limit - Số lượng record mỗi trang (default: 10)
+ * @param {string} options.sortBy - Trường để sort (default: 'checkinTime')
+ * @param {number} options.sortOrder - Thứ tự sort: 1 (asc), -1 (desc) (default: -1)
+ * @param {boolean} options.includeDeleted - Có bao gồm record đã xóa không (default: false)
+ * @returns {object} { data: attendance[], pagination: object }
+ */
+const getListAttendanceByUserId = async (userId, options = {}) => {
+  try {
+    const {
+      startDate = null,
+      endDate = null,
+      page = 1,
+      limit = 10,
+      sortBy = 'checkinTime',
+      sortOrder = -1,
+      includeDeleted = false,
+    } = options
+
+    // Validate page và limit
+    const currentPage = Math.max(1, parseInt(page))
+    const pageLimit = Math.max(1, parseInt(limit))
+    const skip = (currentPage - 1) * pageLimit
+
+    // Build query
+    const query = {
+      userId: new ObjectId(String(userId)),
+    }
+
+    // Chỉ lấy những attendance chưa bị xóa (trừ khi includeDeleted = true)
+    if (!includeDeleted) {
+      query._destroy = false
+    }
+
+    // Thêm filter theo khoảng thời gian nếu có
+    if (startDate && endDate) {
+      query.checkinTime = {
+        $gte: startDate,
+        $lte: endDate,
+      }
+    } else if (startDate) {
+      query.checkinTime = {
+        $gte: startDate,
+      }
+    } else if (endDate) {
+      query.checkinTime = {
+        $lte: endDate,
+      }
+    }
+
+    // Tạo sort object
+    const sortObject = {}
+    sortObject[sortBy] = sortOrder
+
+    // Đếm tổng số record
+    const totalAttendances = await GET_DB().collection(ATTENDANCE_COLLECTION_NAME).countDocuments(query)
+
+    // Tính số trang
+    const totalPages = Math.ceil(totalAttendances / pageLimit)
+
+    // Lấy data
+    const attendances = await GET_DB()
+      .collection(ATTENDANCE_COLLECTION_NAME)
+      .find(query)
+      .sort(sortObject)
+      .skip(skip)
+      .limit(pageLimit)
+      .toArray()
+
+    return {
+      data: attendances,
+      pagination: {
+        currentPage: currentPage,
+        totalPages,
+        totalAttendances,
+        limit: pageLimit,
+        hasNext: currentPage < totalPages,
+        hasPrev: currentPage > 1,
+      },
+    }
+  } catch (error) {
+    throw new Error(`Error getting user attendances: ${error.message}`)
+  }
+}
+
 export const attendanceModel = {
   ATTENDANCE_COLLECTION_NAME,
   ATTENDANCE_COLLECTION_SCHEMA,
@@ -244,4 +335,5 @@ export const attendanceModel = {
   updateInfo,
   deleteAttendance,
   createUniqueIndex,
+  getListAttendanceByUserId,
 }

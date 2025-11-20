@@ -35,9 +35,37 @@ const updateInfo = async (req, res, next) => {
   }
 }
 
+const updateAvatar = async (req, res, next) => {
+  try {
+    const userId = req.params.id
+    const result = await userService.updateAvatar(userId, req)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.NOT_FOUND).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 const resetPassword = async (req, res, next) => {
   try {
     const result = await userService.resetPassword(req.body)
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.NOT_FOUND).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.params.id
+    const result = await userService.changePassword(userId, req.body)
     if (result.success) {
       res.status(StatusCodes.OK).json(result)
     } else {
@@ -133,12 +161,35 @@ const softDeleteUser = async (req, res, next) => {
   }
 }
 
+// NEW: Lấy events của user trong 3 tháng
+const getUserEventsForThreeMonths = async (req, res, next) => {
+  try {
+    const userId = req.params.id
+
+    // Validate userId format (optional)
+    if (!userId || !userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'Invalid user ID format',
+      })
+    }
+
+    const result = await userService.getUserEventsForThreeMonths(userId)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const userController = {
   createNew,
   getDetail,
   updateInfo,
+  updateAvatar,
   resetPassword,
+  changePassword,
   getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
   softDeleteUser, // NEW
+  getUserEventsForThreeMonths, // NEW
 }

@@ -19,4 +19,6 @@ Router.route('/:id')
 // Route for hard delete (permanent deletion)
 Router.route('/:id/hard-delete').delete(authMiddleware, staffController.hardDeleteStaff) // Hard delete staff
 
+Router.route('/:id/logout').put(staffController.handleLogoutStaff)
+
 export const staffRoute = Router

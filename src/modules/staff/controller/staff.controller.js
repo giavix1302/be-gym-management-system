@@ -120,6 +120,21 @@ const hardDeleteStaff = async (req, res, next) => {
   }
 }
 
+const handleLogoutStaff = async (req, res, next) => {
+  try {
+    const staffId = req.params.id
+    const result = await staffService.handleLogoutStaff(staffId)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const staffController = {
   signupForStaff,
   verifyForStaff,
@@ -128,4 +143,5 @@ export const staffController = {
   updateStaff,
   deleteStaff,
   hardDeleteStaff,
+  handleLogoutStaff,
 }

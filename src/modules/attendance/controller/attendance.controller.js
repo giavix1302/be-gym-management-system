@@ -146,6 +146,42 @@ const getLocationAttendances = async (req, res, next) => {
   }
 }
 
+// GET /list/:userId - Lấy danh sách attendance có phân trang
+const getListAttendanceByUserId = async (req, res, next) => {
+  try {
+    const { userId } = req.params
+    const {
+      page = 1,
+      limit = 10,
+      startDate,
+      endDate,
+      sortBy = 'checkinTime',
+      sortOrder = -1,
+      includeDeleted = false,
+    } = req.query
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder: parseInt(sortOrder),
+      includeDeleted: includeDeleted === 'true',
+    }
+
+    const result = await attendanceService.getListAttendanceByUserId(userId, options)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.NOT_FOUND).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const attendanceController = {
   toggleAttendance, // NEW: Unified checkin/checkout
   checkin, // Legacy
@@ -156,4 +192,5 @@ export const attendanceController = {
   updateInfo,
   deleteAttendance,
   getLocationAttendances,
+  getListAttendanceByUserId, // NEW: Get paginated user attendances
 }

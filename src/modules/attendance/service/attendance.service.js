@@ -4,6 +4,8 @@ import { userModel } from '~/modules/user/model/user.model'
 import { locationModel } from '~/modules/location/model/location.model'
 import { sanitize } from '~/utils/utils'
 import { ATTENDANCE_METHOD, STATUS_TYPE } from '~/utils/constants'
+import { subscriptionModel } from '~/modules/subscription/model/subscription.model'
+import { trainerModel } from '~/modules/trainer/model/trainer.model'
 
 // UNIFIED: Toggle checkin/checkout - tự động xử lý based on user state
 const toggleAttendance = async (req) => {
@@ -16,6 +18,20 @@ const toggleAttendance = async (req) => {
       return {
         success: false,
         message: 'User not found',
+      }
+    }
+
+    if (user.role === 'pt') {
+      const subscription = await subscriptionModel.getDetailByUserId(userId)
+      const hasSchedules = await trainerModel.hasTrainerSchedules(userId)
+
+      const hasSubscription = !!subscription
+
+      if (!hasSubscription && !hasSchedules) {
+        return {
+          success: false,
+          message: 'The trainer has no packages, no one-on-one schedules, and no class sessions.',
+        }
       }
     }
 
@@ -362,6 +378,54 @@ const getLocationAttendances = async (locationId, startDate, endDate) => {
   }
 }
 
+// NEW: Get paginated list of user attendances
+const getListAttendanceByUserId = async (userId, options = {}) => {
+  try {
+    // Validate user existence
+    const user = await userModel.getDetailById(userId)
+    if (!user) {
+      return {
+        success: false,
+        message: 'User not found',
+      }
+    }
+
+    // Get attendances with pagination
+    const result = await attendanceModel.getListAttendanceByUserId(userId, options)
+
+    // Add user and location details to each attendance
+    const attendancesWithDetails = await Promise.all(
+      result.data.map(async (attendance) => {
+        const location = await locationModel.getDetailById(attendance.locationId)
+        return {
+          ...sanitize(attendance),
+          location: location
+            ? {
+                _id: location._id,
+                name: location.name,
+                address: location.address,
+              }
+            : null,
+        }
+      })
+    )
+
+    return {
+      success: true,
+      message: 'User attendances retrieved successfully',
+      attendances: attendancesWithDetails,
+      pagination: result.pagination,
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        phone: user.phone,
+      },
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const attendanceService = {
   toggleAttendance, // NEW: Unified checkin/checkout
   getActiveAttendance,
@@ -370,4 +434,5 @@ export const attendanceService = {
   updateInfo,
   deleteAttendance,
   getLocationAttendances,
+  getListAttendanceByUserId, // NEW: Get paginated user attendances
 }

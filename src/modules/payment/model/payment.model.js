@@ -191,30 +191,302 @@ const getAllPaymentsForAdmin = async (page = 1, limit = 10) => {
   }
 }
 
-const mockPayments = [
-  {
-    _id: 'payment1',
-    userId: 'user1',
-    referenceId: 'ref1',
-    paymentType: 'membership',
-    amount: 500000,
-    paymentDate: '',
-    paymentMethod: 'vnpay',
-    description: 'Payment for gym membership package',
-    user: {
-      fullName: 'Nguyễn Văn An',
-      email: 'nguyenvanan@gmail.com',
-      phone: '0912345678',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-      age: 25,
-      dateOfBirth: '',
-      address: '123 Nguyễn Huệ, Quận 1, TP.HCM',
-      gender: 'male',
-      role: 'member',
-      status: 'active',
-    },
-  },
-]
+// NEW: Tính tổng doanh thu theo năm (mặc định năm hiện tại)
+const getTotalRevenueByYear = async (year = new Date().getFullYear()) => {
+  try {
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`)
+    const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`)
+
+    const result = await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+            createdAt: {
+              $gte: startOfYear.getTime(),
+              $lte: endOfYear.getTime(),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$amount' },
+            totalTransactions: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray()
+
+    return {
+      totalRevenue: result[0]?.totalRevenue || 0,
+      totalTransactions: result[0]?.totalTransactions || 0,
+      year: year,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// NEW: Hàm linh hoạt để lấy dữ liệu chart doanh thu
+const getRevenueChartData = async (options = {}) => {
+  try {
+    const {
+      period = 'monthly', // 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
+      year = new Date().getFullYear(),
+      month = null, // Chỉ dùng khi period = 'daily'
+      groupBy = null, // 'paymentType', 'paymentMethod', null
+      locationId = null, // Filter theo location (nếu có)
+      limit = null, // Giới hạn số kết quả
+    } = options
+
+    let dateGrouping = {}
+    let matchConditions = {
+      _destroy: false,
+    }
+
+    // Xử lý filter theo thời gian
+    if (period === 'daily' && month) {
+      const startOfMonth = new Date(year, month - 1, 1)
+      const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999)
+      matchConditions.createdAt = {
+        $gte: startOfMonth.getTime(),
+        $lte: endOfMonth.getTime(),
+      }
+      dateGrouping = {
+        year: { $year: { $toDate: '$createdAt' } },
+        month: { $month: { $toDate: '$createdAt' } },
+        day: { $dayOfMonth: { $toDate: '$createdAt' } },
+      }
+    } else if (period === 'weekly') {
+      const startOfYear = new Date(year, 0, 1)
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999)
+      matchConditions.createdAt = {
+        $gte: startOfYear.getTime(),
+        $lte: endOfYear.getTime(),
+      }
+      dateGrouping = {
+        year: { $year: { $toDate: '$createdAt' } },
+        week: { $week: { $toDate: '$createdAt' } },
+      }
+    } else if (period === 'monthly') {
+      const startOfYear = new Date(year, 0, 1)
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999)
+      matchConditions.createdAt = {
+        $gte: startOfYear.getTime(),
+        $lte: endOfYear.getTime(),
+      }
+      dateGrouping = {
+        year: { $year: { $toDate: '$createdAt' } },
+        month: { $month: { $toDate: '$createdAt' } },
+      }
+    } else if (period === 'quarterly') {
+      const startOfYear = new Date(year, 0, 1)
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999)
+      matchConditions.createdAt = {
+        $gte: startOfYear.getTime(),
+        $lte: endOfYear.getTime(),
+      }
+      dateGrouping = {
+        year: { $year: { $toDate: '$createdAt' } },
+        quarter: {
+          $ceil: {
+            $divide: [{ $month: { $toDate: '$createdAt' } }, 3],
+          },
+        },
+      }
+    } else if (period === 'yearly') {
+      // Lấy 5 năm gần nhất
+      const startYear = year - 4
+      const startOfPeriod = new Date(startYear, 0, 1)
+      const endOfPeriod = new Date(year, 11, 31, 23, 59, 59, 999)
+      matchConditions.createdAt = {
+        $gte: startOfPeriod.getTime(),
+        $lte: endOfPeriod.getTime(),
+      }
+      dateGrouping = {
+        year: { $year: { $toDate: '$createdAt' } },
+      }
+    }
+
+    // Filter theo location nếu có
+    if (locationId) {
+      // Cần lookup với bookings để filter theo location
+      // Sẽ implement trong pipeline
+    }
+
+    // Tạo grouping key
+    let groupingKey = { ...dateGrouping }
+    if (groupBy) {
+      groupingKey[groupBy] = `$${groupBy}`
+    }
+
+    const pipeline = [{ $match: matchConditions }]
+
+    // Nếu có filter location, thêm lookup
+    if (locationId) {
+      pipeline.push(
+        {
+          $lookup: {
+            from: 'bookings',
+            localField: 'referenceId',
+            foreignField: '_id',
+            as: 'booking',
+          },
+        },
+        {
+          $match: {
+            $or: [
+              { paymentType: { $ne: 'booking' } }, // Non-booking payments
+              { 'booking.locationId': new ObjectId(String(locationId)) }, // Booking tại location cụ thể
+            ],
+          },
+        }
+      )
+    }
+
+    pipeline.push(
+      {
+        $group: {
+          _id: groupingKey,
+          totalRevenue: { $sum: '$amount' },
+          totalTransactions: { $sum: 1 },
+          averageAmount: { $avg: '$amount' },
+        },
+      },
+      {
+        $sort: {
+          '_id.year': 1,
+          '_id.quarter': 1,
+          '_id.month': 1,
+          '_id.week': 1,
+          '_id.day': 1,
+        },
+      }
+    )
+
+    if (limit) {
+      pipeline.push({ $limit: limit })
+    }
+
+    const result = await GET_DB().collection(PAYMENT_COLLECTION_NAME).aggregate(pipeline).toArray()
+
+    // Format kết quả theo period
+    const formattedData = result.map((item) => {
+      let label = ''
+      let sortKey = ''
+
+      if (period === 'daily') {
+        label = `${item._id.day}/${item._id.month}/${item._id.year}`
+        sortKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}-${String(item._id.day).padStart(2, '0')}`
+      } else if (period === 'weekly') {
+        label = `Tuần ${item._id.week}/${item._id.year}`
+        sortKey = `${item._id.year}-W${String(item._id.week).padStart(2, '0')}`
+      } else if (period === 'monthly') {
+        const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
+        label = `${monthNames[item._id.month - 1]} ${item._id.year}`
+        sortKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`
+      } else if (period === 'quarterly') {
+        label = `Q${item._id.quarter}/${item._id.year}`
+        sortKey = `${item._id.year}-Q${item._id.quarter}`
+      } else if (period === 'yearly') {
+        label = `${item._id.year}`
+        sortKey = `${item._id.year}`
+      }
+
+      const baseData = {
+        label,
+        period: sortKey,
+        revenue: item.totalRevenue,
+        transactions: item.totalTransactions,
+        averageAmount: Math.round(item.averageAmount),
+      }
+
+      // Thêm groupBy data nếu có
+      if (groupBy && item._id[groupBy]) {
+        baseData[groupBy] = item._id[groupBy]
+      }
+
+      return baseData
+    })
+
+    return {
+      data: formattedData,
+      meta: {
+        period,
+        year,
+        month,
+        groupBy,
+        totalRecords: formattedData.length,
+        totalRevenue: formattedData.reduce((sum, item) => sum + item.revenue, 0),
+        totalTransactions: formattedData.reduce((sum, item) => sum + item.transactions, 0),
+      },
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// NEW: Hàm đặc biệt cho so sánh doanh thu theo paymentType
+const getRevenueByPaymentType = async (year = new Date().getFullYear()) => {
+  try {
+    const startOfYear = new Date(year, 0, 1)
+    const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999)
+
+    const result = await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+            createdAt: {
+              $gte: startOfYear.getTime(),
+              $lte: endOfYear.getTime(),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              month: { $month: { $toDate: '$createdAt' } },
+              paymentType: '$paymentType',
+            },
+            revenue: { $sum: '$amount' },
+          },
+        },
+        {
+          $group: {
+            _id: '$_id.month',
+            data: {
+              $push: {
+                type: '$_id.paymentType',
+                revenue: '$revenue',
+              },
+            },
+            totalRevenue: { $sum: '$revenue' },
+          },
+        },
+        {
+          $sort: { _id: 1 },
+        },
+      ])
+      .toArray()
+
+    return result.map((item) => {
+      const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
+      return {
+        month: monthNames[item._id - 1],
+        membership: item.data.find((d) => d.type === 'membership')?.revenue || 0,
+        booking: item.data.find((d) => d.type === 'booking')?.revenue || 0,
+        class: item.data.find((d) => d.type === 'class')?.revenue || 0,
+        total: item.totalRevenue,
+      }
+    })
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 
 export const paymentModel = {
   PAYMENT_COLLECTION_NAME,
@@ -223,4 +495,7 @@ export const paymentModel = {
   getDetail,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
+  getTotalRevenueByYear,
+  getRevenueChartData,
+  getRevenueByPaymentType,
 }

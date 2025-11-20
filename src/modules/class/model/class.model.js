@@ -25,6 +25,7 @@ const CLASS_COLLECTION_SCHEMA = Joi.object({
   startDate: Joi.string().isoDate().required(),
   endDate: Joi.string().isoDate().required(),
   price: Joi.number().min(1).required(),
+  ratePerClassSession: Joi.number().min(1).required(),
 
   recurrence: Joi.array()
     .items(
@@ -225,6 +226,7 @@ const getListClassInfoForAdmin = async () => {
             _id: 1,
             name: 1,
             price: 1,
+            ratePerClassSession: 1,
             description: 1,
             classType: 1,
             image: { $ifNull: ['$image', ''] },
@@ -1734,6 +1736,143 @@ const getClassesGroupedByLocation = async () => {
   }
 }
 
+// NEW: Tính tổng số lớp học có số lượng học viên < 3 người
+const getClassesWithLowEnrollment = async (minEnrollment = 3) => {
+  try {
+    const result = await GET_DB()
+      .collection(CLASS_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+          },
+        },
+        // Join với class enrollments để đếm số học viên
+        {
+          $lookup: {
+            from: 'class_enrollments',
+            localField: '_id',
+            foreignField: 'classId',
+            pipeline: [
+              {
+                $match: {
+                  _destroy: false,
+                  // Chỉ tính enrollment active/completed, không tính cancelled
+                  status: { $in: ['active', 'pending', 'completed'] },
+                },
+              },
+            ],
+            as: 'enrollments',
+          },
+        },
+        // Đếm số học viên đã đăng ký
+        {
+          $addFields: {
+            enrolledCount: { $size: '$enrollments' },
+          },
+        },
+        // Filter lớp có số học viên < minEnrollment
+        {
+          $match: {
+            enrolledCount: { $lt: minEnrollment },
+          },
+        },
+        // Join với location để lấy thông tin cơ sở
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: { path: '$location', preserveNullAndEmptyArrays: true },
+        },
+        // Project thông tin cần thiết
+        {
+          $project: {
+            classId: '$_id',
+            name: 1,
+            classType: 1,
+            capacity: 1,
+            enrolledCount: 1,
+            startDate: 1,
+            endDate: 1,
+            price: 1,
+            locationName: { $ifNull: ['$location.name', 'Unknown Location'] },
+            locationId: '$locationId',
+          },
+        },
+        // Sắp xếp theo số học viên tăng dần (ít nhất trước)
+        {
+          $sort: { enrolledCount: 1, startDate: 1 },
+        },
+      ])
+      .toArray()
+
+    return {
+      totalLowEnrollmentClasses: result.length,
+      classes: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+// NEW: Chỉ lấy số lượng (không lấy chi tiết)
+const getTotalLowEnrollmentClasses = async (minEnrollment = 3) => {
+  try {
+    const result = await GET_DB()
+      .collection(CLASS_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+          },
+        },
+        // Join với class enrollments
+        {
+          $lookup: {
+            from: 'class_enrollments',
+            localField: '_id',
+            foreignField: 'classId',
+            pipeline: [
+              {
+                $match: {
+                  _destroy: false,
+                  status: { $in: ['active', 'pending', 'completed'] },
+                },
+              },
+            ],
+            as: 'enrollments',
+          },
+        },
+        // Đếm số học viên
+        {
+          $addFields: {
+            enrolledCount: { $size: '$enrollments' },
+          },
+        },
+        // Filter lớp có ít học viên
+        {
+          $match: {
+            enrolledCount: { $lt: minEnrollment },
+          },
+        },
+        // Chỉ đếm số lượng
+        {
+          $count: 'totalLowEnrollmentClasses',
+        },
+      ])
+      .toArray()
+
+    return result[0]?.totalLowEnrollmentClasses || 0
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 // Và thêm vào export
 export const classModel = {
   CLASS_COLLECTION_NAME,
@@ -1752,5 +1891,8 @@ export const classModel = {
   checkPTScheduleConflict,
   getMemberEnrolledClasses,
   getListClassInfoForTrainer,
-  getClassesGroupedByLocation, // ✅ NEW FUNCTION
+  getClassesGroupedByLocation,
+
+  getClassesWithLowEnrollment,
+  getTotalLowEnrollmentClasses,
 }

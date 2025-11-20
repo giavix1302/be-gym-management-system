@@ -624,53 +624,253 @@ const softDeleteUser = async (userId) => {
     throw new Error(error)
   }
 }
+const getTotalActiveUsers = async () => {
+  try {
+    const totalActiveUsers = await GET_DB().collection(USER_COLLECTION_NAME).countDocuments({
+      _destroy: false,
+      role: USER_TYPES.USER, // Chỉ đếm user, không đếm admin/pt/staff
+      status: STATUS_TYPE.ACTIVE,
+    })
 
-const mockUsers = [
-  {
-    _id: 'user1',
-    fullName: 'Nguyễn Văn An',
-    email: 'nguyenvana@email.com',
-    phone: '+84123456789',
-    avatar: '',
-    age: 25,
-    dateOfBirth: '1998-05-15',
-    address: '123 Đường ABC, Quận 1, TP.HCM',
-    gender: 'male',
-    role: 'user',
-    status: 'active', // có đăng kí gói tập, inactive: hết hạn, hoặc chưa đăng kí gói nào
-    createdAt: '2024-01-15T00:00:00Z',
-    subscriptions: [
-      {
-        _id: '',
-        membershipId: '',
-        status: 'active',
-        startDate: '',
-        endDate: '',
-        remainingSessions: 1,
-      },
-    ],
-    attendances: [
-      {
-        locationId: '',
-        checkinTime: '',
-        checkoutTime: '',
-        hours: 0,
-        method: '',
-      },
-    ],
-    booking: [
-      {
-        title: '',
-        trainerName: '',
-        startTime: '',
-        endTime: '',
-        status: '',
-        price: 0,
-        locationName: '',
-      },
-    ],
-  },
-]
+    return totalActiveUsers
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const getUserEventsForThreeMonths = async (userId) => {
+  try {
+    // Tính toán khoảng thời gian 3 tháng
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+
+    // Tháng trước
+    const startDate = new Date(currentYear, currentMonth - 1, 1)
+
+    // Tháng sau (cuối tháng)
+    const endDate = new Date(currentYear, currentMonth + 2, 0, 23, 59, 59, 999)
+
+    const startISO = startDate.toISOString()
+    const endISO = endDate.toISOString()
+
+    console.log('Date range:', { startISO, endISO })
+
+    const db = GET_DB()
+
+    // 1. Lấy bookings của user trong 3 tháng
+    const bookingEvents = await db
+      .collection('bookings')
+      .aggregate([
+        // Match bookings của user chưa bị xóa
+        {
+          $match: {
+            userId: new ObjectId(String(userId)),
+            _destroy: false,
+          },
+        },
+        // Join với schedules để lấy thời gian
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        // Filter theo thời gian 3 tháng
+        {
+          $match: {
+            'schedule._destroy': false,
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, new Date(startISO)] },
+                { $lte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, new Date(endISO)] },
+              ],
+            },
+          },
+        },
+        // Join với trainers để lấy thông tin trainer
+        {
+          $lookup: {
+            from: 'trainers',
+            localField: 'schedule.trainerId',
+            foreignField: '_id',
+            as: 'trainer',
+          },
+        },
+        {
+          $unwind: '$trainer',
+        },
+        // Join với users để lấy tên trainer
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'trainer.userId',
+            foreignField: '_id',
+            as: 'trainerUser',
+          },
+        },
+        {
+          $unwind: '$trainerUser',
+        },
+        // Join với locations để lấy tên location
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Project theo format yêu cầu cho booking
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            startTime: '$schedule.startTime',
+            endTime: '$schedule.endTime',
+            locationName: '$location.name',
+            trainerName: '$trainerUser.fullName',
+            eventType: { $literal: 'booking' }, // Đánh dấu là booking
+          },
+        },
+        // Sort theo thời gian
+        {
+          $sort: { startTime: 1 },
+        },
+      ])
+      .toArray()
+
+    // 2. Lấy classSession của user trong 3 tháng
+    const classSessionEvents = await db
+      .collection('class_sessions')
+      .aggregate([
+        // Match class sessions có user này và trong khoảng thời gian
+        {
+          $match: {
+            users: new ObjectId(String(userId)),
+            _destroy: false,
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$startTime' } }, new Date(startISO)] },
+                { $lte: [{ $dateFromString: { dateString: '$startTime' } }, new Date(endISO)] },
+              ],
+            },
+          },
+        },
+        // Join với rooms để lấy thông tin room
+        {
+          $lookup: {
+            from: 'rooms',
+            localField: 'roomId',
+            foreignField: '_id',
+            as: 'room',
+          },
+        },
+        {
+          $unwind: '$room',
+        },
+        // Join với locations để lấy tên location
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'room.locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Join với trainers để lấy thông tin trainers
+        {
+          $lookup: {
+            from: 'trainers',
+            localField: 'trainers',
+            foreignField: '_id',
+            as: 'trainerDetails',
+          },
+        },
+        // Join với users để lấy tên trainers
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'trainerDetails.userId',
+            foreignField: '_id',
+            as: 'trainerUsers',
+          },
+        },
+        // Project theo format yêu cầu cho classSession
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            startTime: 1,
+            endTime: 1,
+            locationName: '$location.name',
+            roomName: '$room.name',
+            trainerName: {
+              $map: {
+                input: '$trainerUsers',
+                as: 'trainer',
+                in: '$$trainer.fullName',
+              },
+            },
+            eventType: { $literal: 'classSession' }, // Đánh dấu là classSession
+          },
+        },
+        // Sort theo thời gian
+        {
+          $sort: { startTime: 1 },
+        },
+      ])
+      .toArray()
+
+    // 3. Kết hợp và format lại dữ liệu
+    const allEvents = []
+
+    // Thêm booking events
+    bookingEvents.forEach((event) => {
+      allEvents.push({
+        _id: event._id,
+        title: event.title,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        locationName: event.locationName,
+        trainerName: event.trainerName, // string
+        eventType: 'booking',
+      })
+    })
+
+    // Thêm classSession events
+    classSessionEvents.forEach((event) => {
+      allEvents.push({
+        _id: event._id,
+        title: event.title,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        locationName: event.locationName,
+        roomName: event.roomName,
+        trainerName: event.trainerName, // array
+        eventType: 'classSession',
+      })
+    })
+
+    // 4. Sort tất cả events theo thời gian
+    allEvents.sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+
+    return allEvents
+  } catch (error) {
+    throw new Error(`Error getting user events for three months: ${error.message}`)
+  }
+}
 
 export const userModel = {
   USER_COLLECTION_NAME,
@@ -682,4 +882,6 @@ export const userModel = {
   getListUserForAdmin, // NEW
   getListUserForStaff, // NEW
   softDeleteUser, // NEW (improved)
+  getTotalActiveUsers,
+  getUserEventsForThreeMonths,
 }

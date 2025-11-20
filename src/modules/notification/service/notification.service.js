@@ -223,6 +223,7 @@ const createMembershipExpiredNotification = async (userId, subscriptionId, membe
   }
 }
 
+// ✅ 1. SỬA HÀM NÀY - THÊM CHECK DUPLICATE
 const createBookingReminderNotification = async (
   userId,
   bookingId,
@@ -234,6 +235,27 @@ const createBookingReminderNotification = async (
   try {
     const config = NOTIFICATION_CONFIG.BOOKING_REMINDER
     const type = isTrainer ? 'TRAINER_UPCOMING_BOOKING' : 'USER_UPCOMING_BOOKING'
+
+    // ✅ THÊM: Kiểm tra đã tồn tại chưa (không giới hạn thời gian)
+    const alreadyExists = await notificationModel.checkDuplicateNotification(
+      userId,
+      type,
+      bookingId,
+      null // null = không giới hạn thời gian
+    )
+
+    if (alreadyExists) {
+      console.log(
+        `⚠️ Booking reminder already exists - User: ${userId}, Booking: ${bookingId}, isTrainer: ${isTrainer}`
+      )
+      return {
+        success: false,
+        message: 'Booking reminder notification already exists',
+        reason: 'ALREADY_EXISTS',
+      }
+    }
+    // ✅ KẾT THÚC THÊM
+
     const title = isTrainer ? 'Buổi dạy sắp tới' : 'Buổi tập sắp tới'
 
     let message
@@ -263,6 +285,7 @@ const createBookingReminderNotification = async (
   }
 }
 
+// ✅ 2. SỬA HÀM NÀY NỮA - THÊM CHECK DUPLICATE
 const createClassReminderNotification = async (
   userId,
   classSessionId,
@@ -275,6 +298,27 @@ const createClassReminderNotification = async (
   try {
     const config = NOTIFICATION_CONFIG.CLASS_SESSION_REMINDER
     const type = isTrainer ? 'TRAINER_UPCOMING_CLASS_SESSION' : 'USER_UPCOMING_CLASS_SESSION'
+
+    // ✅ THÊM: Kiểm tra đã tồn tại chưa (không giới hạn thời gian)
+    const alreadyExists = await notificationModel.checkDuplicateNotification(
+      userId,
+      type,
+      classSessionId,
+      null // null = không giới hạn thời gian
+    )
+
+    if (alreadyExists) {
+      console.log(
+        `⚠️ Class reminder already exists - User: ${userId}, ClassSession: ${classSessionId}, isTrainer: ${isTrainer}`
+      )
+      return {
+        success: false,
+        message: 'Class reminder notification already exists',
+        reason: 'ALREADY_EXISTS',
+      }
+    }
+    // ✅ KẾT THÚC THÊM
+
     const title = isTrainer ? 'Giờ dạy sắp tới' : 'Lớp học sắp tới'
 
     let message

@@ -238,19 +238,22 @@ const deleteNotificationsByReference = async (referenceId, referenceType) => {
 }
 
 // Kiểm tra notification đã tồn tại chưa (để tránh duplicate)
-const checkDuplicateNotification = async (userId, type, referenceId, timeWindow = 30) => {
+const checkDuplicateNotification = async (userId, type, referenceId, timeWindow = null) => {
   try {
-    const timeWindowAgo = new Date(Date.now() - timeWindow * 60 * 1000) // timeWindow phút trước
+    const query = {
+      userId: new ObjectId(String(userId)),
+      type,
+      referenceId: new ObjectId(String(referenceId)),
+      _destroy: false,
+    }
 
-    const existing = await GET_DB()
-      .collection(NOTIFICATION_COLLECTION_NAME)
-      .findOne({
-        userId: new ObjectId(String(userId)),
-        type,
-        referenceId: new ObjectId(String(referenceId)),
-        createdAt: { $gte: timeWindowAgo },
-        _destroy: false,
-      })
+    // ✅ Nếu timeWindow = null, không giới hạn thời gian
+    if (timeWindow !== null) {
+      const timeWindowAgo = new Date(Date.now() - timeWindow * 60 * 1000)
+      query.createdAt = { $gte: timeWindowAgo }
+    }
+
+    const existing = await GET_DB().collection(NOTIFICATION_COLLECTION_NAME).findOne(query)
 
     return existing !== null
   } catch (error) {
