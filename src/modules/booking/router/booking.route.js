@@ -43,4 +43,7 @@ Router.route('/:id/soft-delete').patch(
 // Route for cancel booking: /api/bookings/:id/cancel
 Router.route('/:id/cancel').patch(bookingValidation.validateBookingId, bookingController.cancelBooking)
 
+// Route for adding trainer advice: /api/bookings/:id/trainer-advice
+Router.route('/:id/trainer-advice').patch(bookingController.updateTrainerAdvice)
+
 export const bookingRoute = Router

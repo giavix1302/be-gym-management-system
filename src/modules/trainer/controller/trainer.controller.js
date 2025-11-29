@@ -159,6 +159,130 @@ const getTrainerEventsForThreeMonths = async (req, res, next) => {
   }
 }
 
+// NEW: Statistics Controllers
+const getTotalTrainers = async (req, res, next) => {
+  try {
+    const result = await trainerService.getTotalTrainers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getActiveTrainers = async (req, res, next) => {
+  try {
+    const result = await trainerService.getActiveTrainers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getPendingTrainers = async (req, res, next) => {
+  try {
+    const result = await trainerService.getPendingTrainers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTotalTrainerRevenue = async (req, res, next) => {
+  try {
+    const result = await trainerService.getTotalTrainerRevenue()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTrainerRevenueByTime = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy } = req.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'startDate and endDate are required query parameters',
+      })
+    }
+
+    // Validate groupBy parameter
+    const allowedGroupBy = ['day', 'week', 'month']
+    const groupByValue = groupBy || 'month'
+    if (!allowedGroupBy.includes(groupByValue)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'groupBy must be one of: day, week, month',
+      })
+    }
+
+    const result = await trainerService.getTrainerRevenueByTime(startDate, endDate, groupByValue)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTrainersBySpecialization = async (req, res, next) => {
+  try {
+    const result = await trainerService.getTrainersBySpecialization()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTrainingSessionsByTime = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy } = req.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'startDate and endDate are required query parameters',
+      })
+    }
+
+    // Validate groupBy parameter
+    const allowedGroupBy = ['day', 'week', 'month']
+    const groupByValue = groupBy || 'day'
+    if (!allowedGroupBy.includes(groupByValue)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'groupBy must be one of: day, week, month',
+      })
+    }
+
+    const result = await trainerService.getTrainingSessionsByTime(startDate, endDate, groupByValue)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTopTrainersByRevenue = async (req, res, next) => {
+  try {
+    const { limit } = req.query
+    const limitValue = parseInt(limit) || 10
+
+    // Validate limit
+    if (limitValue < 1 || limitValue > 50) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'limit must be between 1 and 50',
+      })
+    }
+
+    const result = await trainerService.getTopTrainersByRevenue(limitValue)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 // Thêm vào export
 export const trainerController = {
   createNew,
@@ -169,5 +293,15 @@ export const trainerController = {
   updateIsApproved,
   getListBookingByTrainerId,
   getTrainerDashboardStatsByUserId,
-  getTrainerEventsForThreeMonths, // Thêm function mới
+  getTrainerEventsForThreeMonths,
+
+  // Statistics Controllers
+  getTotalTrainers,
+  getActiveTrainers,
+  getPendingTrainers,
+  getTotalTrainerRevenue,
+  getTrainerRevenueByTime,
+  getTrainersBySpecialization,
+  getTrainingSessionsByTime,
+  getTopTrainersByRevenue,
 }

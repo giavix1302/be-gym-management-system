@@ -22,7 +22,20 @@ Router.route('/is-approved/:id').put(trainerController.updateIsApproved)
 Router.route('/:id/bookings').get(trainerController.getListBookingByTrainerId)
 Router.route('/:id/dashboard-stats').get(trainerController.getTrainerDashboardStatsByUserId)
 
-// NEW: Route for getting trainer events in 3 months
+// Existing route for getting trainer events in 3 months
 Router.route('/:id/events').get(trainerController.getTrainerEventsForThreeMonths)
+
+// NEW: Statistics Routes
+// Overview Statistics - 4 Cards
+Router.route('/statistics/total-trainers').get(trainerController.getTotalTrainers)
+Router.route('/statistics/active-trainers').get(trainerController.getActiveTrainers)
+Router.route('/statistics/pending-trainers').get(trainerController.getPendingTrainers)
+Router.route('/statistics/total-revenue').get(trainerController.getTotalTrainerRevenue)
+
+// Chart Statistics - 4 Charts
+Router.route('/statistics/revenue-by-time').get(trainerController.getTrainerRevenueByTime)
+Router.route('/statistics/trainers-by-specialization').get(trainerController.getTrainersBySpecialization)
+Router.route('/statistics/sessions-by-time').get(trainerController.getTrainingSessionsByTime)
+Router.route('/statistics/top-trainers-by-revenue').get(trainerController.getTopTrainersByRevenue)
 
 export const trainerRoute = Router

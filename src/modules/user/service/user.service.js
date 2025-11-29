@@ -1,4 +1,5 @@
 import { userModel } from '~/modules/user/model/user.model.js'
+import { userStatisticsModel } from '~/modules/user/model/userStatistics.model.js'
 import { handleHashedPassword, isMatch } from '~/utils/bcrypt'
 import { sanitize } from '~/utils/utils'
 
@@ -245,6 +246,127 @@ const getUserEventsForThreeMonths = async (userId) => {
   }
 }
 
+// Statistics Functions - Real Data Only
+const getTotalMembers = async () => {
+  try {
+    const result = await userStatisticsModel.getTotalMembers()
+    return {
+      success: true,
+      message: 'Total members retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTotalMembers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getActiveMembers = async () => {
+  try {
+    const result = await userStatisticsModel.getActiveMembers()
+    return {
+      success: true,
+      message: 'Active members retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getActiveMembers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getNewMembers3Days = async () => {
+  try {
+    const result = await userStatisticsModel.getNewMembers3Days()
+    console.log('🚀 ~ getNewMembers3Days ~ result:', result)
+
+    return {
+      success: true,
+      message: 'New members in 3 days retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getNewMembers3Days ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTotalRevenueFromMembers = async () => {
+  try {
+    const result = await userStatisticsModel.getTotalRevenueFromMembers()
+    console.log('🚀 ~ getTotalRevenueFromMembers ~ result:', result)
+
+    return {
+      success: true,
+      message: 'Total revenue from members retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTotalRevenueFromMembers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getNewMembersByTime = async (startDate, endDate, groupBy = 'month') => {
+  try {
+    const result = await userStatisticsModel.getNewMembersByTime(startDate, endDate, groupBy)
+
+    return {
+      success: true,
+      message: 'New members by time retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getNewMembersByTime ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getMembersByGender = async (startDate, endDate) => {
+  try {
+    const result = await userStatisticsModel.getMembersByGender(startDate, endDate)
+
+    return {
+      success: true,
+      message: 'Members by gender retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getMembersByGender ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getCheckinTrend = async (startDate, endDate, groupBy = 'day') => {
+  try {
+    const result = await userStatisticsModel.getCheckinTrend(startDate, endDate, groupBy)
+
+    return {
+      success: true,
+      message: 'Checkin trend retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getCheckinTrend ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getMembersByAge = async (startDate, endDate) => {
+  try {
+    const result = await userStatisticsModel.getMembersByAge(startDate, endDate)
+
+    return {
+      success: true,
+      message: 'Members by age retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getMembersByAge ~ error:', error)
+    throw new Error(error)
+  }
+}
+
 export const userService = {
   createNew,
   getDetail,
@@ -256,4 +378,14 @@ export const userService = {
   getListUserForStaff, // NEW
   softDeleteUser, // NEW
   getUserEventsForThreeMonths, // NEW
+
+  // Statistics Functions
+  getTotalMembers,
+  getActiveMembers,
+  getNewMembers3Days,
+  getTotalRevenueFromMembers,
+  getNewMembersByTime,
+  getMembersByGender,
+  getCheckinTrend,
+  getMembersByAge,
 }

@@ -6,6 +6,7 @@ import {
   PAYMENT_METHOD,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
+  STATUS_TYPE,
   SUBSCRIPTION_STATUS,
 } from '~/utils/constants'
 import { createPaymentURL, vnpay } from '~/utils/vnpay'
@@ -26,6 +27,7 @@ import { classEnrollmentModel } from '~/modules/classEnrollment/model/classEnrol
 import { classEnrollmentService } from '~/modules/classEnrollment/service/classEnrollment.service'
 import { classSessionModel } from '~/modules/classSession/model/classSession.model'
 import { userModel } from '~/modules/user/model/user.model'
+import { paymentStatisticsModel } from '../model/paymentStatistics.model'
 
 const createPaymentVnpay = async (params) => {
   try {
@@ -59,23 +61,6 @@ const createPaymentVnpay = async (params) => {
     throw new Error(error)
   }
 }
-
-// 🚀 ~ vnpReturn ~ verify: {
-//   vnp_Amount: 300000,
-//   vnp_BankCode: 'NCB',
-//   vnp_BankTranNo: 'VNP15141635',
-//   vnp_CardType: 'ATM',
-//   vnp_OrderInfo: 'Thanh toán Trọn gói tập gym 1 tháng mã: 68a70226139fa5dda393d979',
-//   vnp_PayDate: '20250821213944',
-//   vnp_ResponseCode: '00',
-//   vnp_TmnCode: 'I75N6KW3',
-//   vnp_TransactionNo: '15141635',
-//   vnp_TransactionStatus: '00',
-//   vnp_TxnRef: '68a70226139fa5dda393d979',
-//   isVerified: true,
-//   isSuccess: true,
-//   message: 'Giao dịch thành công'
-// }
 
 const createPaymentBookingPtVnpay = async (data) => {
   try {
@@ -219,6 +204,13 @@ const vnpReturn = async (query) => {
 
       await subscriptionModel.updateInfoWhenPaymentSuccess(subId, dataUpdateSub)
 
+      const updateStatusUser = {
+        status: STATUS_TYPE.ACTIVE,
+        updatedAt: Date.now(),
+      }
+
+      await userModel.updateInfo(userId.toString(), updateStatusUser)
+
       await deleteLinkPaymentTemp(vnp_TxnRef)
 
       let baseUrl
@@ -287,11 +279,6 @@ const vnpReturn = async (query) => {
       }
 
       // create class enrollment
-      // "classId": "68dfb0a182f64303648ccabc",
-      // "userId": "68ba6bdcf9c9e7b2c118b999",
-      // "paymentStatus": "paid",
-      // "price": 300000,
-      // "status": "active"
       const getNew = await classEnrollmentService.addClassEnrollment({
         classId,
         userId,
@@ -356,6 +343,160 @@ const getAllPaymentsForAdmin = async (page = 1, limit = 10) => {
   }
 }
 
+/**
+ * ============================================
+ * HÀM THỐNG KÊ MỚI
+ * ============================================
+ */
+
+/**
+ * Lấy tổng quan thống kê payments (4 cards)
+ */
+const getPaymentOverviewStats = async (startDate = null, endDate = null) => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getOverviewStats(start, end)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy doanh thu theo loại thanh toán (Chart 1)
+ */
+const getPaymentRevenueByType = async (startDate = null, endDate = null) => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getRevenueByPaymentType(start, end)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy xu hướng doanh thu theo thời gian (Chart 2)
+ */
+const getPaymentRevenueTrend = async (startDate = null, endDate = null, groupBy = 'day') => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getRevenueTrend(start, end, groupBy)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy phân bố phương thức thanh toán (Chart 3)
+ */
+const getPaymentMethodDistribution = async (startDate = null, endDate = null) => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getPaymentMethodDistribution(start, end)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy trạng thái thanh toán theo thời gian (Chart 4)
+ */
+const getPaymentStatusOverTime = async (startDate = null, endDate = null, groupBy = 'day') => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getPaymentStatusOverTime(start, end, groupBy)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy tất cả thống kê cùng lúc (tối ưu cho 1 API call)
+ */
+const getAllPaymentStatistics = async (startDate = null, endDate = null, groupBy = 'day') => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    // Gọi tất cả các hàm thống kê song song
+    const [overview, revenueByType, revenueTrend, methodDistribution, statusOverTime] = await Promise.all([
+      paymentStatisticsModel.getOverviewStats(start, end),
+      paymentStatisticsModel.getRevenueByPaymentType(start, end),
+      paymentStatisticsModel.getRevenueTrend(start, end, groupBy),
+      paymentStatisticsModel.getPaymentMethodDistribution(start, end),
+      paymentStatisticsModel.getPaymentStatusOverTime(start, end, groupBy),
+    ])
+
+    return {
+      success: true,
+      data: {
+        overview,
+        charts: {
+          revenueByType,
+          revenueTrend,
+          methodDistribution,
+          statusOverTime,
+        },
+      },
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Lấy top khách hàng chi tiêu nhiều nhất (Optional - Bonus)
+ */
+const getTopSpendingCustomers = async (startDate = null, endDate = null, limit = 10) => {
+  try {
+    const start = startDate ? new Date(startDate) : null
+    const end = endDate ? new Date(endDate) : null
+
+    const result = await paymentStatisticsModel.getTopSpendingCustomers(start, end, limit)
+
+    return {
+      success: true,
+      data: result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const paymentService = {
   createPaymentVnpay,
   createPaymentBookingPtVnpay,
@@ -363,4 +504,13 @@ export const paymentService = {
   vnpReturn,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
+
+  // Thống kê mới
+  getPaymentOverviewStats,
+  getPaymentRevenueByType,
+  getPaymentRevenueTrend,
+  getPaymentMethodDistribution,
+  getPaymentStatusOverTime,
+  getAllPaymentStatistics,
+  getTopSpendingCustomers,
 }

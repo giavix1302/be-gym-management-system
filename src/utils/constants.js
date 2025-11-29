@@ -61,6 +61,7 @@ export const PAYMENT_METHOD = {
 export const PAYMENT_STATUS = {
   PAID: 'paid',
   UNPAID: 'unpaid',
+  REFUNDED: 'refunded',
 }
 
 export const APPROVED_TYPE = {

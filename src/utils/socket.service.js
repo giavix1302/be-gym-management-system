@@ -1,261 +1,143 @@
 import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
-import { conversationModel } from '~/modules/conversation/model/conversation.model'
-import { messageModel } from '~/modules/message/model/message.model'
-import { userModel } from '~/modules/user/model/user.model'
-import { env } from '~/config/environment.config'
+import { env } from '~/config/environment.config.js'
 
 class SocketService {
   constructor() {
     this.io = null
-    this.users = new Map() // userId -> socketId mapping
-    this.userSockets = new Map() // socketId -> userId mapping
+    this.onlineUsers = new Map() // Map<userId, Set<socketId>>
   }
 
   init(server) {
     this.io = new Server(server, {
       cors: {
-        origin: env.FE_URL || 'http://localhost:3000',
+        origin: ['http://localhost:5173', 'http://localhost:3000', env.FE_URL || 'http://localhost:5173'],
         methods: ['GET', 'POST'],
         credentials: true,
       },
+      transports: ['websocket', 'polling'],
+      pingTimeout: 60000,
+      pingInterval: 25000,
     })
+  }
 
-    // Authentication middleware
-    this.io.use(async (socket, next) => {
+  setupSocketAuth() {
+    if (!this.io) {
+      return
+    }
+
+    this.io.use((socket, next) => {
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.query.token ||
+        socket.request.headers.authorization?.replace('Bearer ', '')
+
+      if (!token) {
+        return next(new Error('Authentication error: No token provided'))
+      }
+
       try {
-        const token = socket.handshake.auth.token
-        if (!token) {
-          return next(new Error('Authentication error'))
+        if (!env.JWT_SECRET) {
+          return next(new Error('Server configuration error'))
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET)
-        const user = await userModel.getDetailById(decoded.id)
+        const decoded = jwt.verify(token, env.JWT_SECRET)
 
-        if (!user) {
-          return next(new Error('User not found'))
+        if (!decoded.userId) {
+          return next(new Error('Invalid token: userId missing'))
         }
 
-        socket.userId = user._id.toString()
-        socket.user = user
+        socket.userId = decoded.userId
+        socket.userRole = decoded.role || 'user'
         next()
       } catch (error) {
-        next(new Error('Authentication error'))
+        next(new Error('Authentication error: Invalid token'))
       }
     })
+  }
+
+  handleConnection() {
+    if (!this.io) {
+      return
+    }
 
     this.io.on('connection', (socket) => {
-      console.log(`User ${socket.userId} connected with socket ${socket.id}`)
+      // Track online status
+      if (!this.onlineUsers.has(socket.userId)) {
+        this.onlineUsers.set(socket.userId, new Set())
+      }
+      this.onlineUsers.get(socket.userId).add(socket.id)
 
-      // Store user connection
-      this.users.set(socket.userId, socket.id)
-      this.userSockets.set(socket.id, socket.userId)
+      // JOIN CONVERSATION
+      socket.on('join_conversation', async (conversationId) => {
+        const roomName = `conversation_${conversationId}`
+        await socket.join(roomName)
+        socket.emit('joined_conversation', { conversationId, roomName })
+      })
 
-      // Notify others that user is online
-      this.broadcastUserStatus(socket.userId, true)
+      // LEAVE CONVERSATION
+      socket.on('leave_conversation', (conversationId) => {
+        const roomName = `conversation_${conversationId}`
+        socket.leave(roomName)
+      })
 
-      // Handle joining conversation room
-      socket.on('join_conversation', async (data) => {
-        try {
-          await this.handleJoinConversation(socket, data)
-        } catch (error) {
-          socket.emit('error', { message: error.message })
+      // TYPING INDICATOR
+      socket.on('typing', ({ conversationId, isTyping }) => {
+        const roomName = `conversation_${conversationId}`
+        socket.to(roomName).emit('user_typing', {
+          userId: socket.userId,
+          conversationId,
+          isTyping,
+        })
+      })
+
+      // DISCONNECT
+      socket.on('disconnect', (reason) => {
+        // Remove from online users
+        if (this.onlineUsers.has(socket.userId)) {
+          this.onlineUsers.get(socket.userId).delete(socket.id)
+          if (this.onlineUsers.get(socket.userId).size === 0) {
+            this.onlineUsers.delete(socket.userId)
+          }
         }
       })
 
-      // Handle sending message
-      socket.on('send_message', async (data) => {
-        try {
-          await this.handleSendMessage(socket, data)
-        } catch (error) {
-          socket.emit('error', { message: error.message })
-        }
-      })
-
-      // Handle typing indicator
-      socket.on('typing', (data) => {
-        this.handleTyping(socket, data)
-      })
-
-      // Handle marking messages as read
-      socket.on('mark_read', async (data) => {
-        try {
-          await this.handleMarkRead(socket, data)
-        } catch (error) {
-          socket.emit('error', { message: error.message })
-        }
-      })
-
-      // Handle leaving conversation
-      socket.on('leave_conversation', (data) => {
-        this.handleLeaveConversation(socket, data)
-      })
-
-      // Handle disconnect
-      socket.on('disconnect', () => {
-        console.log(`User ${socket.userId} disconnected`)
-        this.users.delete(socket.userId)
-        this.userSockets.delete(socket.id)
-
-        // Notify others that user is offline
-        this.broadcastUserStatus(socket.userId, false)
+      // ERROR
+      socket.on('error', (error) => {
+        // Handle socket errors silently
       })
     })
-
-    return this.io
   }
 
-  async handleJoinConversation(socket, data) {
-    const { conversationId } = data
-
-    // Verify user has access to conversation
-    const conversation = await conversationModel.getDetailById(conversationId)
-    if (!conversation) {
-      throw new Error('Conversation not found')
-    }
-
-    if (conversation.userId.toString() !== socket.userId && conversation.trainerId.toString() !== socket.userId) {
-      throw new Error('Access denied')
-    }
-
-    // Join room
-    socket.join(`conversation_${conversationId}`)
-
-    console.log(`User ${socket.userId} joined conversation ${conversationId}`)
-    socket.emit('joined_conversation', { conversationId })
+  // Helper method to check if user is online
+  isUserOnline(userId) {
+    return this.onlineUsers.has(userId)
   }
 
-  async handleSendMessage(socket, data) {
-    const { conversationId, content } = data
-
-    // Verify conversation access
-    const conversation = await conversationModel.getDetailById(conversationId)
-    if (!conversation) {
-      throw new Error('Conversation not found')
-    }
-
-    if (conversation.userId.toString() !== socket.userId && conversation.trainerId.toString() !== socket.userId) {
-      throw new Error('Access denied')
-    }
-
-    // Determine sender type
-    const senderType = conversation.userId.toString() === socket.userId ? 'user' : 'trainer'
-
-    // Create message
-    const messageData = {
-      conversationId,
-      senderId: socket.userId,
-      senderType,
-      content,
-      isRead: false,
-    }
-
-    const result = await messageModel.createNew(messageData)
-    const createdMessage = await messageModel.getDetailById(result.insertedId)
-
-    // Update conversation's last message
-    await conversationModel.updateLastMessage(conversationId, content)
-
-    // Emit to all users in conversation room
-    this.io.to(`conversation_${conversationId}`).emit('new_message', {
-      _id: createdMessage._id,
-      conversationId: createdMessage.conversationId,
-      senderId: createdMessage.senderId,
-      senderType: createdMessage.senderType,
-      content: createdMessage.content,
-      timestamp: createdMessage.timestamp,
-      isRead: createdMessage.isRead,
-    })
-
-    // Send push notification to offline users
-    const recipientId =
-      conversation.userId.toString() === socket.userId
-        ? conversation.trainerId.toString()
-        : conversation.userId.toString()
-
-    if (!this.users.has(recipientId)) {
-      // User is offline, could send push notification here
-      console.log(`User ${recipientId} is offline, should send push notification`)
-    }
-  }
-
-  handleTyping(socket, data) {
-    const { conversationId, isTyping } = data
-
-    // Broadcast typing status to others in conversation
-    socket.to(`conversation_${conversationId}`).emit('user_typing', {
-      conversationId,
-      userId: socket.userId,
-      userName: socket.user.fullName,
-      isTyping,
-    })
-  }
-
-  async handleMarkRead(socket, data) {
-    const { conversationId, messageIds } = data
-
-    // Verify conversation access
-    const conversation = await conversationModel.getDetailById(conversationId)
-    if (!conversation) {
-      throw new Error('Conversation not found')
-    }
-
-    if (conversation.userId.toString() !== socket.userId && conversation.trainerId.toString() !== socket.userId) {
-      throw new Error('Access denied')
-    }
-
-    // Mark messages as read
-    const updatedCount = await messageModel.markMessagesAsRead(messageIds)
-
-    // Broadcast to conversation room
-    this.io.to(`conversation_${conversationId}`).emit('messages_read', {
-      conversationId,
-      messageIds,
-      readBy: socket.userId,
-      readByName: socket.user.fullName,
-      updatedCount,
-    })
-  }
-
-  handleLeaveConversation(socket, data) {
-    const { conversationId } = data
-    socket.leave(`conversation_${conversationId}`)
-    console.log(`User ${socket.userId} left conversation ${conversationId}`)
-  }
-
-  broadcastUserStatus(userId, isOnline) {
-    this.io.emit('user_status', {
-      userId,
-      isOnline,
-      lastSeen: isOnline ? null : new Date(),
-    })
-  }
-
-  // Helper method to send message to specific user
-  sendToUser(userId, event, data) {
-    const socketId = this.users.get(userId)
-    if (socketId) {
-      this.io.to(socketId).emit(event, data)
+  // Helper method to emit to specific user
+  emitToUser(userId, event, data) {
+    const userSockets = this.onlineUsers.get(userId)
+    if (userSockets) {
+      userSockets.forEach((socketId) => {
+        this.io.to(socketId).emit(event, data)
+      })
       return true
     }
     return false
   }
 
-  // Helper method to check if user is online
-  isUserOnline(userId) {
-    return this.users.has(userId)
-  }
-
-  // Get online users count
+  // Helper methods for server status
   getOnlineUsersCount() {
-    return this.users.size
+    return this.onlineUsers.size
   }
 
-  // Get online users
   getOnlineUsers() {
-    return Array.from(this.users.keys())
+    const users = []
+    this.onlineUsers.forEach((sockets, userId) => {
+      users.push({ userId, socketCount: sockets.size })
+    })
+    return users
   }
 }
 
-// Create singleton instance
 export const socketService = new SocketService()

@@ -14,6 +14,9 @@ Router.route('/admin').get(classController.getListClassInfoForAdmin)
 Router.route('/user').get(classController.getListClassInfoForUser)
 Router.route('/user/:userId').get(classController.getMemberEnrolledClasses)
 
+// Location-specific routes
+Router.route('/location/:locationId').get(classController.getListClassByLocationId)
+
 // Specific class routes
 Router.route('/:id')
   .get(classController.getClassDetail)

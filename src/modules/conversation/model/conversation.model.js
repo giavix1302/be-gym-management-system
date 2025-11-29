@@ -75,8 +75,6 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
   try {
     const skip = (page - 1) * limit
 
-    console.log('🚀 ~ getConversationsByUserId ~ params:', { userId, role })
-
     // Logic đơn giản với role
     let matchCondition
 
@@ -96,8 +94,6 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
         }
       }
 
-      console.log('🚀 ~ Found trainer:', trainer._id.toString())
-
       // PT có thể có conversations ở 2 vai trò:
       // 1. Là customer (userId)
       // 2. Là trainer (trainerId)
@@ -112,8 +108,6 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
         _destroy: false,
       }
     }
-
-    console.log('🚀 ~ Match condition:', matchCondition)
 
     const conversations = await GET_DB()
       .collection(CONVERSATION_COLLECTION_NAME)
@@ -246,8 +240,6 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
 
     // Count query tương tự
     const total = await GET_DB().collection(CONVERSATION_COLLECTION_NAME).countDocuments(matchCondition)
-
-    console.log('🚀 ~ Query result:', { conversationsFound: conversations.length, total })
 
     return {
       conversations,

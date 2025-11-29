@@ -1,6 +1,7 @@
 /* eslint-disable indent */
 import { sanitize, updateImages } from '~/utils/utils'
 import { trainerModel } from '../model/trainer.model'
+import { trainerStatisticsModel } from '../model/trainerStatistics.model'
 import { userModel } from '~/modules/user/model/user.model'
 import { bookingModel } from '~/modules/booking/model/booking.model' // Import booking model
 import { deleteImageByUrl } from '~/config/cloudinary.config'
@@ -359,6 +360,121 @@ const getTrainerEventsForThreeMonths = async (userId) => {
   }
 }
 
+// NEW: Statistics Functions
+const getTotalTrainers = async () => {
+  try {
+    const result = await trainerStatisticsModel.getTotalTrainers()
+    return {
+      success: true,
+      message: 'Total trainers retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTotalTrainers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getActiveTrainers = async () => {
+  try {
+    const result = await trainerStatisticsModel.getActiveTrainers()
+    return {
+      success: true,
+      message: 'Active trainers retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getActiveTrainers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getPendingTrainers = async () => {
+  try {
+    const result = await trainerStatisticsModel.getPendingTrainers()
+    return {
+      success: true,
+      message: 'Pending trainers retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getPendingTrainers ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTotalTrainerRevenue = async () => {
+  try {
+    const result = await trainerStatisticsModel.getTotalTrainerRevenue()
+    return {
+      success: true,
+      message: 'Total trainer revenue retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTotalTrainerRevenue ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTrainerRevenueByTime = async (startDate, endDate, groupBy = 'month') => {
+  try {
+    const result = await trainerStatisticsModel.getTrainerRevenueByTime(startDate, endDate, groupBy)
+    console.log('🚀 ~ getTrainerRevenueByTime ~ result:', result)
+    return {
+      success: true,
+      message: 'Trainer revenue by time retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTrainerRevenueByTime ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTrainersBySpecialization = async () => {
+  try {
+    const result = await trainerStatisticsModel.getTrainersBySpecialization()
+    return {
+      success: true,
+      message: 'Trainers by specialization retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTrainersBySpecialization ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTrainingSessionsByTime = async (startDate, endDate, groupBy = 'day') => {
+  try {
+    const result = await trainerStatisticsModel.getTrainingSessionsByTime(startDate, endDate, groupBy)
+    return {
+      success: true,
+      message: 'Training sessions by time retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTrainingSessionsByTime ~ error:', error)
+    throw new Error(error)
+  }
+}
+
+const getTopTrainersByRevenue = async (limit = 10) => {
+  try {
+    const result = await trainerStatisticsModel.getTopTrainersByRevenue(limit)
+    console.log('🚀 ~ getTopTrainersByRevenue ~ result:', result)
+    return {
+      success: true,
+      message: 'Top trainers by revenue retrieved successfully',
+      data: result,
+    }
+  } catch (error) {
+    console.error('🚀 ~ getTopTrainersByRevenue ~ error:', error)
+    throw new Error(error)
+  }
+}
+
 // Thêm vào export
 export const trainerService = {
   createNew,
@@ -369,5 +485,15 @@ export const trainerService = {
   updateIsApproved,
   getListBookingByTrainerId,
   getTrainerDashboardStatsByUserId,
-  getTrainerEventsForThreeMonths, // Thêm function mới
+  getTrainerEventsForThreeMonths,
+
+  // Statistics Functions
+  getTotalTrainers,
+  getActiveTrainers,
+  getPendingTrainers,
+  getTotalTrainerRevenue,
+  getTrainerRevenueByTime,
+  getTrainersBySpecialization,
+  getTrainingSessionsByTime,
+  getTopTrainersByRevenue,
 }

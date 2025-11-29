@@ -6,6 +6,7 @@ const Router = express.Router()
 
 Router.route('/')
   .post(upload.array('locationImgs', 6), locationController.createNew)
+  // no authMiddleware
   .get(locationController.getListLocation)
 
 Router.route('/admin').get(locationController.getListLocationForAdmin)

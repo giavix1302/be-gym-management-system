@@ -5,6 +5,7 @@ import { sanitize } from '~/utils/utils'
 import { messageModel } from '~/modules/message/model/message.model'
 import { GET_DB } from '~/config/mongodb.config.js'
 import { ObjectId } from 'mongodb'
+import { socketService } from '~/utils/socket.service.js'
 
 // Helper function để check xem user có phải participant không
 const isUserParticipant = async (conversation, userId, userRole) => {
@@ -12,67 +13,42 @@ const isUserParticipant = async (conversation, userId, userRole) => {
   const conversationTrainerId = conversation.trainerId ? conversation.trainerId.toString() : null
   const currentUserId = userId ? userId.toString() : null
 
-  console.log('🚀 ~ isUserParticipant DEBUG:', {
-    conversationUserId,
-    conversationTrainerId,
-    currentUserId,
-    userRole,
-  })
-
   // Nếu user là customer (role: "user")
   if (userRole === 'user') {
-    const result = conversationUserId === currentUserId
-    console.log('🚀 ~ User role check result:', result)
-    return result
+    return conversationUserId === currentUserId
   }
 
   // Nếu user là PT (role: "pt")
   if (userRole === 'pt') {
     // Kiểm tra nếu PT là customer trong conversation này
     if (conversationUserId === currentUserId) {
-      console.log('🚀 ~ PT is customer in this conversation')
       return true
     }
 
     // conversation.trainerId lưu trainer record ID
     // Cần lấy trainer record và so sánh trainer.userId với currentUserId
     try {
-      console.log('🚀 ~ Looking up trainer with ID:', conversationTrainerId)
-
       const trainer = await GET_DB()
         .collection('trainers')
         .findOne({
           _id: new ObjectId(String(conversationTrainerId)),
         })
 
-      console.log(
-        '🚀 ~ Found trainer:',
-        trainer
-          ? {
-              _id: trainer._id.toString(),
-              userId: trainer.userId.toString(),
-            }
-          : null
-      )
-
       if (trainer && trainer.userId) {
-        const isTrainerMatch = trainer.userId.toString() === currentUserId
-        console.log('🚀 ~ Trainer match result:', isTrainerMatch)
-        return isTrainerMatch
+        return trainer.userId.toString() === currentUserId
       }
     } catch (error) {
-      console.error('🚀 ~ Error checking trainer participant:', error)
+      // Handle error silently
     }
   }
 
-  console.log('🚀 ~ No participant match found')
   return false
 }
 
 const createOrGetConversation = async (data) => {
   try {
     const { trainerId, bookingId } = data
-    const userId = data.userId // Get from auth middleware
+    const userId = data.userId
 
     // Validate user exists
     const isUserExist = await userModel.getDetailById(userId)
@@ -125,7 +101,6 @@ const createOrGetConversation = async (data) => {
 }
 
 const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'user') => {
-  console.log('🚀 ~ getConversationsByUserId ~ params:', { userId, role })
   try {
     // Chuyển đổi page và limit thành số
     const pageNum = parseInt(page) || 1
@@ -137,7 +112,6 @@ const getConversationsByUserId = async (userId, page = 1, limit = 20, role = 'us
 
     // Truyền role vào model
     const result = await conversationModel.getConversationsByUserId(userId, pageNum, limitNum, role)
-    console.log('🚀 ~ getConversationsByUserId ~ result:', result)
 
     return {
       success: true,
@@ -155,36 +129,20 @@ const getMessagesByConversationId = async (conversationId, userId, page = 1, lim
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 50
 
-    console.log('🚀 ~ getMessagesByConversationId ~ params:', {
-      conversationId,
-      userId,
-      userRole,
-    })
-
     // Check if conversation exists
     const conversation = await conversationModel.getDetailById(conversationId)
     if (conversation === null) {
       return { success: false, message: 'Conversation not found' }
     }
 
-    console.log('🚀 ~ conversation found:', {
-      userId: conversation.userId?.toString(),
-      trainerId: conversation.trainerId?.toString(),
-    })
-
     // Sử dụng helper function để check participant
     const isParticipant = await isUserParticipant(conversation, userId, userRole)
-    console.log('🚀 ~ isParticipant:', isParticipant)
 
     if (!isParticipant) {
       return { success: false, message: 'You are not a participant in this conversation' }
     }
 
     const result = await messageModel.getMessagesByConversationId(conversationId, pageNum, limitNum)
-    console.log(
-      '🚀 ~ getMessagesByConversationId ~ result:',
-      result.messages.map((message) => sanitize(message))
-    )
 
     return {
       success: true,
@@ -196,34 +154,20 @@ const getMessagesByConversationId = async (conversationId, userId, page = 1, lim
       pagination: result.pagination,
     }
   } catch (error) {
-    console.error('🚀 ~ getMessagesByConversationId error:', error)
     throw new Error(error)
   }
 }
 
 const sendMessage = async (conversationId, userId, content, userRole = null) => {
   try {
-    console.log('🚀 ~ sendMessage ~ params:', {
-      conversationId,
-      userId,
-      content,
-      userRole,
-    })
-
     // Check if conversation exists
     const conversation = await conversationModel.getDetailById(conversationId)
     if (conversation === null) {
       return { success: false, message: 'Conversation not found' }
     }
 
-    console.log('🚀 ~ sendMessage conversation found:', {
-      userId: conversation.userId?.toString(),
-      trainerId: conversation.trainerId?.toString(),
-    })
-
     // Sử dụng helper function để check participant
     const isParticipant = await isUserParticipant(conversation, userId, userRole)
-    console.log('🚀 ~ sendMessage isParticipant:', isParticipant)
 
     if (!isParticipant) {
       return { success: false, message: 'You are not a participant in this conversation' }
@@ -238,7 +182,7 @@ const sendMessage = async (conversationId, userId, content, userRole = null) => 
       senderId: userId,
       senderType,
       content,
-      isRead: false, // Will be marked as read by sender in separate call if needed
+      isRead: false,
     }
 
     const result = await messageModel.createNew(messageData)
@@ -247,13 +191,36 @@ const sendMessage = async (conversationId, userId, content, userRole = null) => 
     // Update conversation's last message
     await conversationModel.updateLastMessage(conversationId, content)
 
+    // Emit socket event để realtime
+    const messageToEmit = {
+      _id: createdMessage._id,
+      conversationId: createdMessage.conversationId,
+      senderId: createdMessage.senderId,
+      senderType: createdMessage.senderType,
+      content: createdMessage.content,
+      timestamp: createdMessage.timestamp,
+      isRead: createdMessage.isRead,
+    }
+
+    // Emit to all users in conversation room
+    if (socketService.io) {
+      socketService.io.to(`conversation_${conversationId}`).emit('new_message', messageToEmit)
+    }
+
+    // Send notification to offline users
+    const recipientId =
+      conversation.userId.toString() === userId ? conversation.trainerId.toString() : conversation.userId.toString()
+
+    if (!socketService.isUserOnline(recipientId)) {
+      // TODO: Implement push notification here
+    }
+
     return {
       success: true,
       message: 'Message sent successfully',
       data: sanitize(createdMessage),
     }
   } catch (error) {
-    console.error('🚀 ~ sendMessage error:', error)
     throw new Error(error)
   }
 }
@@ -274,6 +241,19 @@ const markMessagesAsRead = async (conversationId, userId, messageIds, userRole =
 
     // Mark messages as read
     const updatedCount = await messageModel.markMessagesAsRead(messageIds)
+
+    // Emit socket event khi mark as read
+    if (socketService.io && updatedCount > 0) {
+      const user = await userModel.getDetailById(userId)
+
+      socketService.io.to(`conversation_${conversationId}`).emit('messages_read', {
+        conversationId,
+        messageIds,
+        readBy: userId,
+        readByName: user?.fullName || 'Unknown',
+        updatedCount,
+      })
+    }
 
     return {
       success: true,

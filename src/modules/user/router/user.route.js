@@ -34,4 +34,17 @@ Router.route('/:id/soft-delete').delete(userController.softDeleteUser)
 // NEW: GET /users/:id/events/three-months
 Router.route('/:id/events/three-months').get(userController.getUserEventsForThreeMonths)
 
+// NEW: Statistics Routes
+// Overview Statistics - 4 Cards
+Router.route('/statistics/total-members').get(userController.getTotalMembers)
+Router.route('/statistics/active-members').get(userController.getActiveMembers)
+Router.route('/statistics/new-members-3days').get(userController.getNewMembers3Days)
+Router.route('/statistics/total-revenue').get(userController.getTotalRevenueFromMembers)
+
+// Chart Statistics - 4 Charts
+Router.route('/statistics/new-members-by-time').get(userController.getNewMembersByTime)
+Router.route('/statistics/members-by-gender').get(userController.getMembersByGender)
+Router.route('/statistics/checkin-trend').get(userController.getCheckinTrend)
+Router.route('/statistics/members-by-age').get(userController.getMembersByAge)
+
 export const userRoute = Router

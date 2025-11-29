@@ -21,16 +21,17 @@ const START_APP = () => {
   // Tạo HTTP server để có thể tích hợp Socket.IO
   const server = createServer(app)
 
-  // Initialize Socket.IO
-  socketService.init(server)
-  console.log('Socket.IO server initialized')
-
   // Middleware xử lý JSON body
   app.use(express.json())
 
   app.use(corsConfig)
 
   app.use(cookieParser())
+
+  socketService.init(server)
+  socketService.setupSocketAuth()
+  socketService.handleConnection()
+  console.log('✅ Socket.IO fully initialized with auth and handlers')
 
   // router
   app.use('/v1', APIs_V1)

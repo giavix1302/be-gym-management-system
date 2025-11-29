@@ -105,10 +105,10 @@ const login = async (reqBody) => {
       // lấy thông tin staff
       const staff = await staffModel.getDetailByUserId(account._id)
 
-      // await staffShiftModel.createNew({
-      //   staffId: staff._id.toString(),
-      //   checkinTime: new Date().toISOString(),
-      // })
+      await staffShiftModel.createNew({
+        staffId: staff._id.toString(),
+        checkinTime: new Date().toISOString(),
+      })
 
       const { locationInfo, userInfo, ...staffInfo } = staff
 

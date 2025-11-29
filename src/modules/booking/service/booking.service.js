@@ -408,6 +408,43 @@ const softDeleteBooking = async (bookingId) => {
   }
 }
 
+const updateTrainerAdvice = async (bookingId, advice) => {
+  try {
+    // Validate booking exists
+    const isBookingExist = await bookingModel.getDetailById(bookingId)
+    if (isBookingExist === null) {
+      return { success: false, message: 'Booking not found' }
+    }
+
+    // Validate advice structure
+    if (!advice || !advice.title || !Array.isArray(advice.content)) {
+      return {
+        success: false,
+        message: 'Invalid advice format. Required: { title: string, content: string[] }',
+      }
+    }
+
+    // Get existing trainerAdvice array or initialize empty array
+    const existingAdvice = isBookingExist.trainerAdvice || []
+
+    // Add new advice to array
+    const updatedAdvice = [...existingAdvice, advice]
+
+    // Update booking with new advice
+    const result = await bookingModel.updateInfo(bookingId, {
+      trainerAdvice: updatedAdvice,
+    })
+
+    return {
+      success: true,
+      message: 'Trainer advice added successfully',
+      booking: sanitize(result),
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const bookingService = {
   createBooking,
   getBookingById,
@@ -420,4 +457,5 @@ export const bookingService = {
   softDeleteBooking,
   cancelBooking,
   getBookingsByTrainerId,
+  updateTrainerAdvice,
 }

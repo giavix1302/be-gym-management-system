@@ -93,6 +93,159 @@ const getAllPaymentsForAdmin = async (req, res, next) => {
   }
 }
 
+/**
+ * ============================================
+ * CONTROLLERS THỐNG KÊ MỚI
+ * ============================================
+ */
+
+/**
+ * Lấy tổng quan thống kê payments (4 cards)
+ * GET /api/v1/payments/statistics/overview
+ * Query params: startDate, endDate
+ */
+const getPaymentOverviewStats = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query
+
+    const result = await paymentService.getPaymentOverviewStats(startDate, endDate)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy doanh thu theo loại thanh toán (Chart 1)
+ * GET /api/v1/payments/statistics/revenue-by-type
+ * Query params: startDate, endDate
+ */
+const getPaymentRevenueByType = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query
+
+    const result = await paymentService.getPaymentRevenueByType(startDate, endDate)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy xu hướng doanh thu theo thời gian (Chart 2)
+ * GET /api/v1/payments/statistics/revenue-trend
+ * Query params: startDate, endDate, groupBy (day/week/month)
+ */
+const getPaymentRevenueTrend = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query
+
+    const result = await paymentService.getPaymentRevenueTrend(startDate, endDate, groupBy)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy phân bố phương thức thanh toán (Chart 3)
+ * GET /api/v1/payments/statistics/payment-methods
+ * Query params: startDate, endDate
+ */
+const getPaymentMethodDistribution = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query
+
+    const result = await paymentService.getPaymentMethodDistribution(startDate, endDate)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy trạng thái thanh toán theo thời gian (Chart 4)
+ * GET /api/v1/payments/statistics/status-over-time
+ * Query params: startDate, endDate, groupBy (day/week/month)
+ */
+const getPaymentStatusOverTime = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query
+
+    const result = await paymentService.getPaymentStatusOverTime(startDate, endDate, groupBy)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy tất cả thống kê cùng lúc (tối ưu cho dashboard)
+ * GET /api/v1/payments/statistics/all
+ * Query params: startDate, endDate, groupBy (day/week/month)
+ */
+const getAllPaymentStatistics = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query
+
+    const result = await paymentService.getAllPaymentStatistics(startDate, endDate, groupBy)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Lấy top khách hàng chi tiêu nhiều nhất (Bonus)
+ * GET /api/v1/payments/statistics/top-customers
+ * Query params: startDate, endDate, limit
+ */
+const getTopSpendingCustomers = async (req, res, next) => {
+  try {
+    const { startDate, endDate, limit = 10 } = req.query
+
+    const result = await paymentService.getTopSpendingCustomers(startDate, endDate, parseInt(limit))
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const paymentController = {
   createPaymentVnpay,
   vnpReturn,
@@ -100,4 +253,13 @@ export const paymentController = {
   createPaymentClassVnpay,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
+
+  // Controllers thống kê mới
+  getPaymentOverviewStats,
+  getPaymentRevenueByType,
+  getPaymentRevenueTrend,
+  getPaymentMethodDistribution,
+  getPaymentStatusOverTime,
+  getAllPaymentStatistics,
+  getTopSpendingCustomers,
 }

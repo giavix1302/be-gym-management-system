@@ -12,7 +12,7 @@ const STAFF_COLLECTION_SCHEMA = Joi.object({
   citizenId: Joi.string().required().trim().strict(),
   positionName: Joi.string().valid(STAFF_TYPE.RECEPTIONIST, STAFF_TYPE.CLEANER).required(),
   hourlyRate: Joi.number().min(0).required(), // lương 1 giờ
-  hoursWorked: Joi.number().min(0).default(0), // số giờ làm việc
+  hoursWorked: Joi.number().precision(2), // số  làm việc
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),

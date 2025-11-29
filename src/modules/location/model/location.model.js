@@ -71,6 +71,12 @@ const getListLocationForAdmin = async (page = 1, limit = 10) => {
     const db = GET_DB()
     const skip = (page - 1) * limit
 
+    // Tính ngày 30 ngày trước
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysAgoISO = thirtyDaysAgo.toISOString()
+    const nowISO = new Date().toISOString()
+
     const pipeline = [
       {
         $match: { _destroy: { $ne: true } },
@@ -117,6 +123,73 @@ const getListLocationForAdmin = async (page = 1, limit = 10) => {
           as: 'roomList',
         },
       },
+      // Lookup attendances (30 days, đã checkout)
+      {
+        $lookup: {
+          from: 'attendances',
+          localField: '_id',
+          foreignField: 'locationId',
+          pipeline: [
+            {
+              $match: {
+                _destroy: { $ne: true },
+                checkoutTime: { $ne: '' }, // Đã checkout
+                hours: { $gt: 0 },
+                checkinTime: {
+                  $gte: thirtyDaysAgoISO,
+                  $lte: nowISO,
+                },
+              },
+            },
+            // Lookup user info
+            {
+              $lookup: {
+                from: 'users',
+                let: { userIdStr: { $toString: '$userId' } },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: [{ $toString: '$_id' }, '$$userIdStr'],
+                      },
+                      _destroy: { $ne: true },
+                    },
+                  },
+                  {
+                    $project: {
+                      fullName: 1,
+                      phone: 1,
+                    },
+                  },
+                ],
+                as: 'userInfo',
+              },
+            },
+            {
+              $unwind: {
+                path: '$userInfo',
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            // Project attendance fields
+            {
+              $project: {
+                checkinTime: 1,
+                checkoutTime: 1,
+                hours: 1,
+                method: 1,
+                fullName: { $ifNull: ['$userInfo.fullName', ''] },
+                phone: { $ifNull: ['$userInfo.phone', ''] },
+              },
+            },
+            // Sort by checkinTime descending (mới nhất trước)
+            {
+              $sort: { checkinTime: -1 },
+            },
+          ],
+          as: 'attendances',
+        },
+      },
       // Add computed fields
       {
         $addFields: {
@@ -137,6 +210,7 @@ const getListLocationForAdmin = async (page = 1, limit = 10) => {
           staffCount: 1,
           roomCount: 1,
           equipmentCount: 1,
+          attendances: 1,
           createdAt: 1,
         },
       },
@@ -478,3 +552,70 @@ export const locationModel = {
   getLocationAttendanceStats,
   getTopLocationsByAttendance,
 }
+
+const data = [
+  {
+    _id: '6922d2e9f19f6286245443e3',
+    name: 'THE GYM Hoàng Văn Thụ',
+    phone: '+84987650000',
+    address: {
+      street: '123 Hoàng Văn Thụ',
+      ward: 'Bình Trưng',
+      province: 'Hồ Chí Minh',
+    },
+    images: [
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1763889897/gms-image/rqjjagjybyvq8gcef3op.webp',
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1763889898/gms-image/yl9ff1nbuwz1vc9gpkya.jpg',
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1763889898/gms-image/fmxko2eidtberzbhpqsy.webp',
+    ],
+    equipments: [],
+    staffCount: 1,
+    roomCount: 0,
+    equipmentCount: 0,
+    attendances: [
+      {
+        checkinTime: '',
+        checkoutTime: '',
+        hours: 0.12,
+        fullName: '', // userId -> users,
+        phone: '',
+        method: 'qrCode',
+      },
+    ],
+  },
+  {
+    _id: '68b80223c88e5c2130e084e8',
+    name: 'The gym Nguyễn Kiệm',
+    phone: '+84987654321',
+    address: {
+      street: '123 Lê Lợi',
+      ward: 'Phường Bến Thành',
+      province: 'Hồ Chí Minh',
+    },
+    images: [
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1760686278/gms-image/uazqqvqo2cru82uvfuay.jpg',
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1760686278/gms-image/uazqqvqo2cru82uvfuay.jpg',
+      'https://res.cloudinary.com/djw2dyvbc/image/upload/v1760686278/gms-image/uazqqvqo2cru82uvfuay.jpg',
+    ],
+    equipments: [
+      {
+        _id: '6926a4f0e5bb04a7614e46f0',
+        name: 'Máy chạy bộ',
+        brand: 'BMC',
+        price: 100000000,
+        locationId: '68b80223c88e5c2130e084e8',
+        purchaseDate: '2025-11-27T00:00:00.000Z',
+        muscleCategories: ['core', 'legs', 'hamstrings', 'quadriceps'],
+        image: 'https://res.cloudinary.com/djw2dyvbc/image/upload/v1764140272/gms-image/cppb4m8gvrppnhsc6rhy.png',
+        status: 'active',
+        maintenanceHistory: [],
+        createdAt: 1764140272290,
+        updatedAt: null,
+        _destroy: false,
+      },
+    ],
+    staffCount: 2,
+    roomCount: 5,
+    equipmentCount: 1,
+  },
+]

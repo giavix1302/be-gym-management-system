@@ -1873,6 +1873,166 @@ const getTotalLowEnrollmentClasses = async (minEnrollment = 3) => {
   }
 }
 
+const getListClassByLocationId = async (locationId) => {
+  try {
+    const db = await GET_DB()
+    const locationObjectId = new ObjectId(String(locationId))
+
+    const listClasses = await db
+      .collection(CLASS_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _destroy: false,
+            locationId: locationObjectId,
+          },
+        },
+        // Lookup Location
+        {
+          $lookup: {
+            from: locationModel.LOCATION_COLLECTION_NAME,
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'locationDetails',
+          },
+        },
+        // Lookup ClassEnrollments
+        {
+          $lookup: {
+            from: 'class_enrollments',
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'enrollments',
+          },
+        },
+        // Lookup ClassSessions
+        {
+          $lookup: {
+            from: 'class_sessions',
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'sessions',
+          },
+        },
+        // Add fields for counts and revenue
+        {
+          $addFields: {
+            enrolledCount: { $size: '$enrollments' },
+            sessionsCount: { $size: '$sessions' },
+            revenue: {
+              $sum: '$enrollments.price',
+            },
+            locationInfo: { $arrayElemAt: ['$locationDetails', 0] },
+          },
+        },
+        // Unwind enrollments to lookup user details
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'enrollments.userId',
+            foreignField: '_id',
+            as: 'enrollmentUsers',
+          },
+        },
+        // Process enrollments with user details
+        {
+          $addFields: {
+            classEnrollments: {
+              $map: {
+                input: '$enrollments',
+                as: 'enrollment',
+                in: {
+                  $let: {
+                    vars: {
+                      user: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: '$enrollmentUsers',
+                              as: 'u',
+                              cond: { $eq: ['$$u._id', '$$enrollment.userId'] },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    },
+                    in: {
+                      _id: '$$enrollment._id',
+                      fullName: { $ifNull: ['$$user.fullName', ''] },
+                      phone: { $ifNull: ['$$user.phone', ''] },
+                      avatar: { $ifNull: ['$$user.avatar', ''] },
+                      createAt: { $ifNull: ['$$enrollment.enrolledAt', ''] },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Process sessions
+        {
+          $addFields: {
+            classSessions: {
+              $map: {
+                input: '$sessions',
+                as: 'session',
+                in: {
+                  _id: '$$session._id',
+                  classId: '$$session.classId',
+                  className: '$name',
+                  hours: '$$session.hours',
+                  startTime: { $ifNull: ['$$session.startTime', ''] },
+                  endTime: { $ifNull: ['$$session.endTime', ''] },
+                  roomId: { $ifNull: ['$$session.roomId', ''] },
+                  trainers: { $ifNull: ['$$session.trainers', []] },
+                  users: { $ifNull: ['$$session.users', []] },
+                  title: { $ifNull: ['$$session.title', 'Lớp học'] },
+                },
+              },
+            },
+          },
+        },
+        // Project final structure
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            price: 1,
+            ratePerClassSession: 1,
+            description: 1,
+            classType: 1,
+            image: { $ifNull: ['$image', ''] },
+            trainers: 1,
+            capacity: 1,
+            startDate: 1,
+            endDate: 1,
+            recurrence: 1,
+            enrolledCount: 1,
+            sessionsCount: 1,
+            revenue: 1,
+            classSessions: 1,
+            classEnrollments: 1,
+            locationName: { $ifNull: ['$locationInfo.name', ''] },
+            locationAddress: {
+              street: { $ifNull: ['$locationInfo.address.street', ''] },
+              ward: { $ifNull: ['$locationInfo.address.ward', ''] },
+              province: { $ifNull: ['$locationInfo.address.province', ''] },
+            },
+          },
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+      ])
+      .toArray()
+
+    return listClasses
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 // Và thêm vào export
 export const classModel = {
   CLASS_COLLECTION_NAME,
@@ -1881,6 +2041,7 @@ export const classModel = {
   getDetailById,
   getList,
   getListWithDetails,
+  getListClassByLocationId,
   updateInfo,
   deleteClass,
   softDelete,

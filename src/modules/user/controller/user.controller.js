@@ -181,6 +181,121 @@ const getUserEventsForThreeMonths = async (req, res, next) => {
   }
 }
 
+// NEW: Statistics Controllers
+const getTotalMembers = async (req, res, next) => {
+  try {
+    const result = await userService.getTotalMembers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getActiveMembers = async (req, res, next) => {
+  try {
+    const result = await userService.getActiveMembers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getNewMembers3Days = async (req, res, next) => {
+  try {
+    const result = await userService.getNewMembers3Days()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getTotalRevenueFromMembers = async (req, res, next) => {
+  try {
+    const result = await userService.getTotalRevenueFromMembers()
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getNewMembersByTime = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy } = req.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'startDate and endDate are required query parameters',
+      })
+    }
+
+    // Validate groupBy parameter
+    const allowedGroupBy = ['day', 'week', 'month']
+    const groupByValue = groupBy || 'month'
+    if (!allowedGroupBy.includes(groupByValue)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'groupBy must be one of: day, week, month',
+      })
+    }
+
+    const result = await userService.getNewMembersByTime(startDate, endDate, groupByValue)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getMembersByGender = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query
+    const result = await userService.getMembersByGender(startDate, endDate)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getCheckinTrend = async (req, res, next) => {
+  try {
+    const { startDate, endDate, groupBy } = req.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'startDate and endDate are required query parameters',
+      })
+    }
+
+    // Validate groupBy parameter
+    const allowedGroupBy = ['day', 'week', 'month']
+    const groupByValue = groupBy || 'day'
+    if (!allowedGroupBy.includes(groupByValue)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'groupBy must be one of: day, week, month',
+      })
+    }
+
+    const result = await userService.getCheckinTrend(startDate, endDate, groupByValue)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getMembersByAge = async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query
+    const result = await userService.getMembersByAge(startDate, endDate)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const userController = {
   createNew,
   getDetail,
@@ -192,4 +307,14 @@ export const userController = {
   getListUserForStaff, // NEW
   softDeleteUser, // NEW
   getUserEventsForThreeMonths, // NEW
+
+  // Statistics Controllers
+  getTotalMembers,
+  getActiveMembers,
+  getNewMembers3Days,
+  getTotalRevenueFromMembers,
+  getNewMembersByTime,
+  getMembersByGender,
+  getCheckinTrend,
+  getMembersByAge,
 }

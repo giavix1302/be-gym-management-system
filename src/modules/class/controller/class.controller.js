@@ -146,6 +146,21 @@ const getMemberEnrolledClasses = async (req, res, next) => {
   }
 }
 
+const getListClassByLocationId = async (req, res, next) => {
+  try {
+    const locationId = req.params.locationId
+    const result = await classService.getListClassByLocationId(locationId)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const classController = {
   addClass,
   getListClasses,
@@ -157,4 +172,5 @@ export const classController = {
   getListClassInfoForUser,
   getMemberEnrolledClasses,
   getListClassInfoForTrainer,
+  getListClassByLocationId,
 }

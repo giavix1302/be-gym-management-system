@@ -48,15 +48,7 @@ const getMessages = async (req, res, next) => {
     const userId = req.user?.userId // Get from auth middleware
     const userRole = role || req.user?.role || 'user'
 
-    console.log('🚀 ~ getMessages controller - FIXED:', {
-      'req.user.userId': req.user?.userId,
-      userId,
-      userRole,
-      conversationId,
-    })
-
     if (!userId) {
-      console.log('🚀 ~ ERROR: userId is still undefined')
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
         message: 'Authentication required',
@@ -86,15 +78,7 @@ const sendMessage = async (req, res, next) => {
     const userId = req.user?.userId
     const userRole = role || req.user?.role || 'user'
 
-    console.log('🚀 ~ sendMessage controller - FIXED:', {
-      'req.user.userId': req.user?.userId,
-      userId,
-      userRole,
-      conversationId,
-    })
-
     if (!userId) {
-      console.log('🚀 ~ ERROR: userId is undefined in sendMessage')
       return res.status(StatusCodes.UNAUTHORIZED).json({
         success: false,
         message: 'Authentication required',

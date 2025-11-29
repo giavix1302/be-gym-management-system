@@ -253,6 +253,22 @@ const getMemberEnrolledClasses = async (userId) => {
   }
 }
 
+const getListClassByLocationId = async (locationId) => {
+  try {
+    const classes = await classModel.getListClassByLocationId(locationId)
+
+    return {
+      success: true,
+      message: 'Get classes by location successfully',
+      classes: classes,
+      total: classes.length,
+    }
+  } catch (error) {
+    console.error('Error in getListClassByLocationId service:', error)
+    throw new Error(error)
+  }
+}
+
 export const classService = {
   addClass,
   getListClasses,
@@ -264,4 +280,5 @@ export const classService = {
   getListClassInfoForUser,
   getMemberEnrolledClasses,
   getListClassInfoForTrainer,
+  getListClassByLocationId,
 }

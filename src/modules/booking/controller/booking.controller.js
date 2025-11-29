@@ -161,6 +161,23 @@ const cancelBooking = async (req, res, next) => {
   }
 }
 
+const updateTrainerAdvice = async (req, res, next) => {
+  try {
+    const bookingId = req.params.id
+    const advice = req.body
+
+    const result = await bookingService.updateTrainerAdvice(bookingId, advice)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const bookingController = {
   createBooking,
   getBookingById,
@@ -173,4 +190,5 @@ export const bookingController = {
   softDeleteBooking,
   cancelBooking,
   getBookingsByTrainerId,
+  updateTrainerAdvice,
 }

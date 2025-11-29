@@ -2,7 +2,7 @@ import { ObjectId, ReturnDocument } from 'mongodb'
 import Joi from 'joi'
 import { GET_DB } from '~/config/mongodb.config.js'
 import { OBJECT_ID_RULE, OBJECT_ID_RULE_MESSAGE } from '~/utils/validators.js'
-import { PAYMENT_METHOD, PAYMENT_TYPE } from '~/utils/constants.js'
+import { PAYMENT_METHOD, PAYMENT_STATUS, PAYMENT_TYPE } from '~/utils/constants.js'
 
 const PAYMENT_COLLECTION_NAME = 'payments'
 const PAYMENT_COLLECTION_SCHEMA = Joi.object({
@@ -18,6 +18,12 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
     PAYMENT_METHOD.VNPAY
   ),
   description: Joi.string().trim().strict(),
+
+  paymentStatus: Joi.string()
+    .valid(PAYMENT_STATUS.PAID, PAYMENT_STATUS.UNPAID, PAYMENT_STATUS.REFUNDED)
+    .default(PAYMENT_STATUS.PAID),
+  refundAmount: Joi.number().min(1).default(0),
+  refundDate: Joi.string().isoDate().allow('').default(''),
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),

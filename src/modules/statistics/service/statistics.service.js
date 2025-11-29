@@ -5,6 +5,7 @@ import { paymentModel } from '~/modules/payment/model/payment.model'
 import { subscriptionModel } from '~/modules/subscription/model/subscription.model'
 import { trainerModel } from '~/modules/trainer/model/trainer.model'
 import { userModel } from '~/modules/user/model/user.model'
+import { staffDashboardStatisticsModel } from '../model/staffDashboardStatistics.model'
 
 const getDataDashboardForAdmin = async () => {
   try {
@@ -63,6 +64,21 @@ const getDataDashboardForAdmin = async () => {
   }
 }
 
+const getDataDashboardForStaff = async (locationId) => {
+  try {
+    const dashboardData = await staffDashboardStatisticsModel.getAllStaffDashboardData(locationId)
+
+    return {
+      success: true,
+      message: 'Get staff dashboard data successfully',
+      data: dashboardData,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const statisticsService = {
   getDataDashboardForAdmin,
+  getDataDashboardForStaff,
 }
