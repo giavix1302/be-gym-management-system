@@ -871,7 +871,275 @@ const getUserEventsForThreeMonths = async (userId) => {
     throw new Error(`Error getting user events for three months: ${error.message}`)
   }
 }
+const getUserEventsForSevenDays = async (userId) => {
+  try {
+    // Tính toán khoảng thời gian 7 ngày tới
+    const now = new Date()
+    const startDate = new Date() // Từ hiện tại
+    const endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 ngày
 
+    const startISO = startDate.toISOString()
+    const endISO = endDate.toISOString()
+
+    console.log('7-day range:', { startISO, endISO })
+
+    const db = GET_DB()
+
+    // 1. Lấy bookings của user trong 7 ngày tới
+    const bookingEvents = await db
+      .collection('bookings')
+      .aggregate([
+        // Match bookings của user chưa bị xóa
+        {
+          $match: {
+            userId: new ObjectId(String(userId)),
+            _destroy: false,
+          },
+        },
+        // Join với schedules để lấy thời gian
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        // Filter theo thời gian 7 ngày tới
+        {
+          $match: {
+            'schedule._destroy': false,
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, new Date(startISO)] },
+                { $lte: [{ $dateFromString: { dateString: '$schedule.startTime' } }, new Date(endISO)] },
+              ],
+            },
+          },
+        },
+        // Join với trainers để lấy thông tin trainer
+        {
+          $lookup: {
+            from: 'trainers',
+            localField: 'schedule.trainerId',
+            foreignField: '_id',
+            as: 'trainer',
+          },
+        },
+        {
+          $unwind: '$trainer',
+        },
+        // Join với users để lấy tên trainer
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'trainer.userId',
+            foreignField: '_id',
+            as: 'trainerUser',
+          },
+        },
+        {
+          $unwind: '$trainerUser',
+        },
+        // Join với locations để lấy tên location
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Project theo format yêu cầu cho booking
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            startTime: '$schedule.startTime',
+            endTime: '$schedule.endTime',
+            locationName: '$location.name',
+            trainerName: '$trainerUser.fullName',
+            eventType: { $literal: 'booking' }, // Đánh dấu là booking
+            // Thêm fields hữu ích cho 7 ngày tới
+            dayOfWeek: {
+              $dayOfWeek: { $dateFromString: { dateString: '$schedule.startTime' } },
+            },
+            dateOnly: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: { $dateFromString: { dateString: '$schedule.startTime' } },
+              },
+            },
+            timeOnly: {
+              $dateToString: {
+                format: '%H:%M',
+                date: { $dateFromString: { dateString: '$schedule.startTime' } },
+              },
+            },
+          },
+        },
+        // Sort theo thời gian
+        {
+          $sort: { startTime: 1 },
+        },
+      ])
+      .toArray()
+
+    // 2. Lấy classSession của user trong 7 ngày tới
+    const classSessionEvents = await db
+      .collection('class_sessions')
+      .aggregate([
+        // Match class sessions có user này và trong khoảng thời gian
+        {
+          $match: {
+            users: new ObjectId(String(userId)),
+            _destroy: false,
+            $expr: {
+              $and: [
+                { $gte: [{ $dateFromString: { dateString: '$startTime' } }, new Date(startISO)] },
+                { $lte: [{ $dateFromString: { dateString: '$startTime' } }, new Date(endISO)] },
+              ],
+            },
+          },
+        },
+        // Join với rooms để lấy thông tin room
+        {
+          $lookup: {
+            from: 'rooms',
+            localField: 'roomId',
+            foreignField: '_id',
+            as: 'room',
+          },
+        },
+        {
+          $unwind: '$room',
+        },
+        // Join với locations để lấy tên location
+        {
+          $lookup: {
+            from: 'locations',
+            localField: 'room.locationId',
+            foreignField: '_id',
+            as: 'location',
+          },
+        },
+        {
+          $unwind: '$location',
+        },
+        // Join với trainers để lấy thông tin trainers
+        {
+          $lookup: {
+            from: 'trainers',
+            localField: 'trainers',
+            foreignField: '_id',
+            as: 'trainerDetails',
+          },
+        },
+        // Join với users để lấy tên trainers
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'trainerDetails.userId',
+            foreignField: '_id',
+            as: 'trainerUsers',
+          },
+        },
+        // Project theo format yêu cầu cho classSession
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            startTime: 1,
+            endTime: 1,
+            locationName: '$location.name',
+            roomName: '$room.name',
+            trainerName: {
+              $map: {
+                input: '$trainerUsers',
+                as: 'trainer',
+                in: '$$trainer.fullName',
+              },
+            },
+            eventType: { $literal: 'classSession' }, // Đánh dấu là classSession
+            // Thêm fields hữu ích cho 7 ngày tới
+            dayOfWeek: {
+              $dayOfWeek: { $dateFromString: { dateString: '$startTime' } },
+            },
+            dateOnly: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: { $dateFromString: { dateString: '$startTime' } },
+              },
+            },
+            timeOnly: {
+              $dateToString: {
+                format: '%H:%M',
+                date: { $dateFromString: { dateString: '$startTime' } },
+              },
+            },
+          },
+        },
+        // Sort theo thời gian
+        {
+          $sort: { startTime: 1 },
+        },
+      ])
+      .toArray()
+
+    // 3. Kết hợp và format lại dữ liệu
+    const allEvents = []
+
+    // Thêm booking events
+    bookingEvents.forEach((event) => {
+      allEvents.push({
+        _id: event._id,
+        title: event.title,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        locationName: event.locationName,
+        trainerName: event.trainerName, // string
+        eventType: 'booking',
+        // Format date/time cho 7 ngày tới
+        date: event.dateOnly,
+        time: event.timeOnly,
+        dayOfWeek: event.dayOfWeek,
+      })
+    })
+
+    // Thêm classSession events
+    classSessionEvents.forEach((event) => {
+      allEvents.push({
+        _id: event._id,
+        title: event.title,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        locationName: event.locationName,
+        roomName: event.roomName,
+        trainerName: event.trainerName, // array
+        eventType: 'classSession',
+        // Format date/time cho 7 ngày tới
+        date: event.dateOnly,
+        time: event.timeOnly,
+        dayOfWeek: event.dayOfWeek,
+      })
+    })
+
+    // 4. Sort tất cả events theo thời gian
+    allEvents.sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+
+    console.log(`Found ${allEvents.length} events in next 7 days for user ${userId}`)
+
+    return allEvents
+  } catch (error) {
+    throw new Error(`Error getting user events for seven days: ${error.message}`)
+  }
+}
 export const userModel = {
   USER_COLLECTION_NAME,
   USER_COLLECTION_SCHEMA,
@@ -884,4 +1152,5 @@ export const userModel = {
   softDeleteUser, // NEW (improved)
   getTotalActiveUsers,
   getUserEventsForThreeMonths,
+  getUserEventsForSevenDays,
 }

@@ -4,7 +4,7 @@ import { paymentService } from '../service/payment.service'
 
 const createPaymentVnpay = async (req, res, next) => {
   try {
-    const result = await paymentService.createPaymentVnpay(req.params)
+    const result = await paymentService.createPaymentVnpay(req.body)
 
     if (result.success) {
       res.status(StatusCodes.OK).json(result)
@@ -52,6 +52,22 @@ const createPaymentClassVnpay = async (req, res, next) => {
       res.status(StatusCodes.OK).json(result)
     } else {
       res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
+const updateRefundPayment = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    console.log('🚀 ~ updateRefundPayment ~ req.body:', req.body)
+    const result = await paymentService.updateRefundPayment(id, req.body)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.BAD_REQUEST).json(result)
     }
   } catch (error) {
     next(error)
@@ -253,6 +269,7 @@ export const paymentController = {
   createPaymentClassVnpay,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
+  updateRefundPayment,
 
   // Controllers thống kê mới
   getPaymentOverviewStats,

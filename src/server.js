@@ -6,7 +6,8 @@ import cookieParser from 'cookie-parser'
 import { errorHandler } from './middlewares/errorHandler.js'
 import { APIs_V1 } from './routers/v1/index.js'
 import { CONNECT_DB } from './config/mongodb.config.js'
-import { initRedis } from '~/utils/redis.js'
+import { initRedis } from '~/utils/redis.js' // CHỈ 1 Redis
+import { initRedisListener, closeRedisListener } from '~/utils/redis-listener.js' // Listener
 import { env } from './config/environment.config.js'
 import { socketService } from '~/utils/socket.service.js'
 import { startAllJobs } from './jobs/index.js'
@@ -64,13 +65,28 @@ const START_APP = () => {
   })
 
   // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('Server is shutting down...')
-    server.close(() => {
-      console.log('Server closed')
-      process.exit(0)
-    })
-  })
+  const gracefulShutdown = async () => {
+    console.log('📴 Server is shutting down...')
+
+    try {
+      // Đóng Redis listener
+      await closeRedisListener()
+
+      // Đóng server
+      server.close(() => {
+        console.log('✅ Server closed gracefully')
+        process.exit(0)
+      })
+    } catch (error) {
+      console.error('❌ Error during shutdown:', error)
+      process.exit(1)
+    }
+  }
+
+  // Thêm các signal handlers
+  process.on('SIGINT', gracefulShutdown)
+  process.on('SIGTERM', gracefulShutdown)
+  process.on('SIGHUP', gracefulShutdown)
 }
 
 ;(async () => {
@@ -83,6 +99,11 @@ const START_APP = () => {
     await initRedis()
     console.log('Connected to Redis Cloud!')
 
+    // Khởi tạo Redis listener cho expired events
+    console.log('Initializing Redis expired listener...')
+    await initRedisListener()
+    console.log('✅ Redis expired listener initialized!')
+
     // Start all scheduled jobs after database connections are established
     console.log('Starting scheduled jobs...')
     await startAllJobs()
@@ -90,7 +111,7 @@ const START_APP = () => {
 
     START_APP()
   } catch (error) {
-    console.error('Error connecting to MongoDB Atlas:', error)
-    process.exit(0)
+    console.error('Error starting application:', error)
+    process.exit(1)
   }
 })()

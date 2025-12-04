@@ -255,104 +255,6 @@ const getUpcomingBookingsByUserId = async (userId) => {
   }
 }
 
-// Alternative simpler version if you don't need complex grouping
-const getUpcomingBookingsByUserIdSimple = async (userId) => {
-  try {
-    const now = new Date()
-
-    const bookings = await GET_DB()
-      .collection(BOOKING_COLLECTION_NAME)
-      .aggregate([
-        // Match user's bookings
-        {
-          $match: {
-            userId: new ObjectId(String(userId)),
-            _destroy: false,
-          },
-        },
-        // Join with schedules
-        {
-          $lookup: {
-            from: 'schedules',
-            localField: 'scheduleId',
-            foreignField: '_id',
-            as: 'schedule',
-          },
-        },
-        { $unwind: '$schedule' },
-        // Filter for upcoming only
-        {
-          $match: {
-            'schedule.startTime': { $gte: now.toISOString() },
-            'schedule._destroy': false,
-          },
-        },
-        // Join with trainer info
-        {
-          $lookup: {
-            from: 'trainers',
-            localField: 'schedule.trainerId',
-            foreignField: '_id',
-            as: 'trainer',
-          },
-        },
-        { $unwind: '$trainer' },
-        // Join with trainer user info
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'trainer.userId',
-            foreignField: '_id',
-            as: 'trainerUser',
-          },
-        },
-        { $unwind: '$trainerUser' },
-        // Join with location
-        {
-          $lookup: {
-            from: 'locations',
-            localField: 'locationId',
-            foreignField: '_id',
-            as: 'location',
-          },
-        },
-        { $unwind: '$location' },
-        // Project final structure
-        {
-          $project: {
-            bookingId: '$_id',
-            startTime: '$schedule.startTime',
-            endTime: '$schedule.endTime',
-            trainer: {
-              trainerId: '$trainer._id',
-              fullName: '$trainerUser.fullName',
-              avatar: '$trainerUser.avatar',
-              specialization: '$trainer.specialization',
-              pricePerHour: '$trainer.pricePerHour',
-            },
-            location: {
-              _id: '$location._id',
-              name: '$location.name',
-              address: '$location.address',
-            },
-            status: 1,
-            note: 1,
-            createdAt: 1,
-          },
-        },
-        // Sort by start time
-        {
-          $sort: { startTime: 1 },
-        },
-      ])
-      .toArray()
-
-    return bookings
-  } catch (error) {
-    throw new Error(`Error fetching upcoming bookings: ${error.message}`)
-  }
-}
-
 const checkUserBookingConflict = async (userId, scheduleId) => {
   try {
     // First, get the schedule details to know the time range
@@ -1072,6 +974,90 @@ const updateBookingStatus = async (bookingId, newStatus) => {
   }
 }
 
+/**
+ * Kiểm tra xem booking có thể hủy hay không
+ * @param {string} bookingId - ID của booking cần kiểm tra
+ * @returns {Promise<boolean>} true nếu còn nhiều hơn 1 ngày, false nếu ít hơn 1 ngày
+ */
+const canCancelBooking = async (bookingId) => {
+  try {
+    const booking = await GET_DB()
+      .collection('bookings')
+      .aggregate([
+        {
+          $match: {
+            _id: new ObjectId(String(bookingId)),
+            _destroy: false,
+          },
+        },
+        {
+          $lookup: {
+            from: 'schedules',
+            localField: 'scheduleId',
+            foreignField: '_id',
+            as: 'schedule',
+          },
+        },
+        {
+          $unwind: '$schedule',
+        },
+        {
+          $project: {
+            startTime: '$schedule.startTime',
+          },
+        },
+      ])
+      .toArray()
+
+    if (!booking || booking.length === 0) {
+      return false
+    }
+
+    const now = new Date()
+    const startTime = new Date(booking[0].startTime)
+    const timeRemaining = startTime.getTime() - now.getTime()
+    const hoursRemaining = timeRemaining / (1000 * 60 * 60)
+
+    // Trả về true nếu còn nhiều hơn 24 giờ (1 ngày), false nếu ít hơn
+    return hoursRemaining > 24
+  } catch (error) {
+    throw new Error(`Error checking booking cancellation: ${error.message}`)
+  }
+}
+
+const deleteMultiplePendingBookings = async (bookingIds) => {
+  try {
+    if (!bookingIds || bookingIds.length === 0) {
+      console.log('⚠️ No booking IDs provided for deletion')
+      return { deletedCount: 0 }
+    }
+
+    console.log(`🗑️ Attempting to delete ${bookingIds.length} expired pending bookings`)
+    console.log(`📋 Booking IDs: ${bookingIds}`)
+
+    // Convert string IDs to ObjectId và xóa chỉ những booking có status PENDING
+    const result = await GET_DB()
+      .collection(BOOKING_COLLECTION_NAME)
+      .deleteMany({
+        _id: { $in: bookingIds.map((id) => new ObjectId(String(id))) },
+        status: BOOKING_STATUS.PENDING, // Chỉ xóa pending bookings để tránh xóa nhầm
+        _destroy: false, // Chỉ xóa những record chưa bị soft delete
+      })
+
+    console.log(`✅ Successfully deleted ${result.deletedCount}/${bookingIds.length} pending bookings`)
+
+    // Log chi tiết nếu có booking không bị xóa
+    if (result.deletedCount !== bookingIds.length) {
+      console.log(`⚠️ Some bookings were not deleted (possibly already confirmed/cancelled or not found)`)
+    }
+
+    return { deletedCount: result.deletedCount }
+  } catch (error) {
+    console.error('❌ Error deleting multiple pending bookings:', error)
+    throw new Error(`Error deleting multiple pending bookings: ${error.message}`)
+  }
+}
+
 // Cập nhật export để include các hàm mới:
 export const bookingModel = {
   BOOKING_COLLECTION_NAME,
@@ -1093,4 +1079,7 @@ export const bookingModel = {
   getBookingsToUpdateStatus, // Lấy bookings cần update status
   updateMultipleBookingStatus, // Update nhiều bookings cùng lúc
   updateBookingStatus, // Update single booking status
+
+  canCancelBooking,
+  deleteMultiplePendingBookings,
 }

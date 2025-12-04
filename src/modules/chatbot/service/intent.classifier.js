@@ -1,30 +1,19 @@
-// intent.classifier.js - Simple Intent Classification for Gym Chatbot
+// intent.classifier.js - Optimized Intent Classification for Gym Chatbot
 
-// Main classification function
+// Main classification function - Simplified to 2 main categories: FAQ and PERSONAL
 export const classifyIntent = (message) => {
   const messageLower = message.toLowerCase().trim()
 
-  // 1. General questions (non-gym related)
-  if (isGeneralQuestion(messageLower)) {
+  // ✅ FIXED: Check personal info queries FIRST
+  if (isPersonalInfoQuestion(messageLower)) {
     return {
-      category: 'FAQ',
-      specificIntent: 'general_question',
-      faqCategory: 'general',
-      confidence: 0.9,
-    }
-  }
-
-  // 2. Gym Locations
-  if (isLocationQuestion(messageLower)) {
-    return {
-      category: 'FAQ',
-      specificIntent: 'gym_locations',
-      faqCategory: 'locations',
+      category: 'PERSONAL',
+      specificIntent: getSpecificPersonalIntent(messageLower),
       confidence: 0.8,
     }
   }
 
-  // 3. Memberships
+  // ✅ FIXED: Check membership questions BEFORE general questions
   if (isMembershipQuestion(messageLower)) {
     return {
       category: 'FAQ',
@@ -34,7 +23,16 @@ export const classifyIntent = (message) => {
     }
   }
 
-  // 4. Classes
+  // Check other specific FAQ categories
+  if (isLocationQuestion(messageLower)) {
+    return {
+      category: 'FAQ',
+      specificIntent: 'gym_locations',
+      faqCategory: 'locations',
+      confidence: 0.8,
+    }
+  }
+
   if (isClassQuestion(messageLower)) {
     return {
       category: 'FAQ',
@@ -44,7 +42,6 @@ export const classifyIntent = (message) => {
     }
   }
 
-  // 5. Trainers
   if (isTrainerQuestion(messageLower)) {
     return {
       category: 'FAQ',
@@ -54,7 +51,15 @@ export const classifyIntent = (message) => {
     }
   }
 
-  // 6. Equipment
+  if (isTechnicalReportQuestion(messageLower)) {
+    return {
+      category: 'FAQ',
+      specificIntent: 'technical_report',
+      faqCategory: 'technical',
+      confidence: 0.9,
+    }
+  }
+
   if (isEquipmentQuestion(messageLower)) {
     return {
       category: 'FAQ',
@@ -64,7 +69,15 @@ export const classifyIntent = (message) => {
     }
   }
 
-  // 7. Basic gym info (operating hours, contact)
+  if (isFacilitiesQuestion(messageLower)) {
+    return {
+      category: 'FAQ',
+      specificIntent: 'gym_facilities',
+      faqCategory: 'facilities',
+      confidence: 0.8,
+    }
+  }
+
   if (isBasicInfoQuestion(messageLower)) {
     return {
       category: 'FAQ',
@@ -74,13 +87,13 @@ export const classifyIntent = (message) => {
     }
   }
 
-  // 8. Personal actions (require login)
-  if (isPersonalAction(messageLower)) {
+  // ✅ MOVED: General questions check AFTER specific categories
+  if (isGeneralQuestion(messageLower)) {
     return {
-      category: 'ACTION',
-      specificIntent: 'requires_login',
-      faqCategory: null,
-      confidence: 0.7,
+      category: 'FAQ',
+      specificIntent: 'general_question',
+      faqCategory: 'general',
+      confidence: 0.9,
     }
   }
 
@@ -93,7 +106,71 @@ export const classifyIntent = (message) => {
   }
 }
 
-// Helper functions for classification
+// Personal info questions (require authentication) - ✅ FIXED
+const isPersonalInfoQuestion = (message) => {
+  const patterns = [
+    // ✅ FIXED: Thêm patterns bị thiếu
+    'gói tập của tôi',
+    'gói của tôi',
+    'gói hiện tại của tôi',
+    'gói tập hiện tại của tôi', // ✅ CRITICAL: Pattern này bị thiếu
+    'membership của tôi',
+    'gói membership của tôi',
+    'tôi có gói gì',
+    'gói tôi đang dùng',
+    'gói tôi đang có',
+    'kiểm tra gói tập',
+    'xem gói tập',
+    'check membership',
+    'my membership',
+
+    // My schedule patterns
+    'lịch tập của tôi',
+    'lịch của tôi',
+    'lịch cá nhân',
+    'lịch hẹn của tôi',
+    'tôi có lịch gì',
+    'xem lịch tập',
+    'kiểm tra lịch',
+    'lịch với trainer',
+    'lịch lớp học',
+    'my schedule',
+    'check schedule',
+    'lịch ngày mai',
+    'lịch hôm nay',
+  ]
+  return patterns.some((pattern) => message.includes(pattern))
+}
+
+// Get specific personal intent - ✅ FIXED
+const getSpecificPersonalIntent = (message) => {
+  // ✅ FIXED: Membership related - thêm more patterns
+  if (
+    message.includes('gói tập') ||
+    message.includes('gói hiện tại') ||
+    message.includes('membership') ||
+    message.includes('kiểm tra gói') ||
+    message.includes('xem gói') ||
+    message.includes('gói của tôi')
+  ) {
+    return 'my_membership'
+  }
+
+  // Schedule related
+  if (
+    message.includes('lịch') ||
+    message.includes('schedule') ||
+    message.includes('hẹn') ||
+    message.includes('trainer') ||
+    message.includes('lớp học')
+  ) {
+    return 'my_schedule'
+  }
+
+  return 'my_membership' // ✅ FIXED: Default to my_membership instead of check_membership
+}
+
+// General questions (non-gym related)
 const isGeneralQuestion = (message) => {
   // Skip if contains gym-related keywords first
   if (
@@ -102,7 +179,15 @@ const isGeneralQuestion = (message) => {
     message.includes('cơ sở') ||
     message.includes('lớp') ||
     message.includes('trainer') ||
-    message.includes('thiết bị')
+    message.includes('thiết bị') ||
+    message.includes('của tôi') ||
+    message.includes('gym') ||
+    message.includes('phòng tập') ||
+    message.includes('mở cửa') ||
+    message.includes('đóng cửa') ||
+    message.includes('hoạt động') ||
+    message.includes('liên hệ') ||
+    message.includes('hotline')
   ) {
     return false
   }
@@ -124,13 +209,21 @@ const isGeneralQuestion = (message) => {
     'hello',
     'hi',
     'bye',
+    '1 + 1',
+    'bằng mấy',
+    'phép tính',
+    'toán học',
+    'math',
+    'cộng',
+    'trừ',
+    'nhân',
+    'chia',
   ]
   return patterns.some((pattern) => message.includes(pattern))
 }
 
 const isLocationQuestion = (message) => {
   const patterns = [
-    // Specific location phrases (check first)
     'có mấy cơ sở',
     'bao nhiêu cơ sở',
     'có những cơ sở nào',
@@ -142,8 +235,6 @@ const isLocationQuestion = (message) => {
     'các chi nhánh',
     'những chi nhánh',
     'chi nhánh nào',
-
-    // Location-specific words
     'cơ sở',
     'chi nhánh',
     'địa chỉ',
@@ -151,8 +242,6 @@ const isLocationQuestion = (message) => {
     'quận',
     'huyện',
     'location',
-
-    // Address patterns
     'gym ở đâu',
     'địa chỉ gym',
     'cơ sở gần nhất',
@@ -163,8 +252,12 @@ const isLocationQuestion = (message) => {
 }
 
 const isMembershipQuestion = (message) => {
+  // Skip personal membership questions
+  if (message.includes('của tôi') || message.includes('tôi có') || message.includes('my ')) {
+    return false
+  }
+
   const patterns = [
-    // Specific membership phrases (check first)
     'các gói membership',
     'những gói membership',
     'danh sách gói membership',
@@ -176,14 +269,10 @@ const isMembershipQuestion = (message) => {
     'các gói tập',
     'những gói tập',
     'danh sách gói tập',
-
-    // Membership-related words
-    'gói membership',
+    'gói membership', // ✅ FIXED: Thêm pattern này
     'gói tập',
     'gói',
     'membership',
-
-    // Price/fee related
     'phí',
     'giá',
     'chi phí',
@@ -192,8 +281,6 @@ const isMembershipQuestion = (message) => {
     'giá gói',
     'phí gói',
     'giá membership',
-
-    // Comparison phrases
     'so sánh gói',
     'gói nào rẻ',
     'gói nào tốt',
@@ -205,7 +292,6 @@ const isMembershipQuestion = (message) => {
 
 const isClassQuestion = (message) => {
   const patterns = [
-    // Specific class phrases
     'có lớp gì',
     'lớp nào',
     'có những lớp nào',
@@ -217,8 +303,6 @@ const isClassQuestion = (message) => {
     'các lớp học',
     'những lớp học',
     'lớp học nào',
-
-    // Class types
     'lớp',
     'class',
     'yoga',
@@ -228,8 +312,6 @@ const isClassQuestion = (message) => {
     'cardio',
     'zumba',
     'pilates',
-
-    // Class-related phrases
     'môn gì',
     'môn nào',
     'tập được gì',
@@ -244,7 +326,6 @@ const isClassQuestion = (message) => {
 
 const isTrainerQuestion = (message) => {
   const patterns = [
-    // Specific trainer phrases
     'có mấy trainer',
     'bao nhiêu trainer',
     'có những trainer nào',
@@ -254,14 +335,10 @@ const isTrainerQuestion = (message) => {
     'trainer nào',
     'pt nào',
     'huấn luyện viên nào',
-
-    // Trainer-related words
     'trainer',
     'pt',
     'huấn luyện viên',
     'coach',
-
-    // Trainer specialization
     'trainer yoga',
     'trainer boxing',
     'pt chuyên',
@@ -273,29 +350,22 @@ const isTrainerQuestion = (message) => {
 
 const isEquipmentQuestion = (message) => {
   const patterns = [
-    // Equipment quantity phrases
     'có bao nhiêu thiết bị',
     'mấy thiết bị',
     'bao nhiêu máy',
     'có mấy máy',
     'số lượng thiết bị',
     'thiết bị có bao nhiêu',
-
-    // Equipment general phrases
     'có thiết bị gì',
     'thiết bị nào',
     'có những thiết bị',
     'các thiết bị',
     'những thiết bị',
     'danh sách thiết bị',
-
-    // Equipment words
     'thiết bị',
     'máy',
     'dụng cụ',
     'equipment',
-
-    // Specific equipment
     'tạ',
     'treadmill',
     'bike',
@@ -303,8 +373,6 @@ const isEquipmentQuestion = (message) => {
     'xe đạp tập',
     'máy tập',
     'dụng cụ tập',
-
-    // Equipment at gym
     'thiết bị ở phòng tập',
     'máy ở gym',
     'dụng cụ gym',
@@ -313,9 +381,81 @@ const isEquipmentQuestion = (message) => {
   return patterns.some((pattern) => message.includes(pattern))
 }
 
+const isTechnicalReportQuestion = (message) => {
+  const patterns = [
+    'máy bị hư',
+    'máy hỏng',
+    'thiết bị hỏng',
+    'thiết bị bị hư',
+    'máy không hoạt động',
+    'thiết bị không hoạt động',
+    'phản ánh',
+    'khiếu nại',
+    'báo cáo',
+    'report',
+    'máy lỗi',
+    'thiết bị lỗi',
+    'equipment broken',
+    'equipment not working',
+    'machine broken',
+    'machine not working',
+    'sự cố',
+    'vấn đề thiết bị',
+    'máy có vấn đề',
+    'thiết bị có vấn đề',
+    'góp ý',
+    'feedback',
+    'complaint',
+    'máy không chạy',
+    'thiết bị không chạy',
+  ]
+  return patterns.some((pattern) => message.includes(pattern))
+}
+
+const isFacilitiesQuestion = (message) => {
+  const patterns = [
+    'phòng tắm',
+    'tắm nước nóng',
+    'nước nóng',
+    'có nước nóng',
+    'sauna',
+    'xông hơi',
+    'phòng xông hơi',
+    'jacuzzi',
+    'bể sục',
+    'bể sục nóng',
+    'tiện ích',
+    'dịch vụ',
+    'tủ khóa',
+    'thay đồ',
+    'phòng thay đồ',
+    'vệ sinh',
+    'toilet',
+    'wc',
+    'facilities',
+    'amenities',
+    'shower',
+    'locker',
+    'changing room',
+    'massage',
+    'trị liệu',
+    'thư giãn',
+    'relax',
+    'spa',
+    'có gì',
+    'dịch vụ gì',
+    'tiện ích gì',
+    'có những gì',
+    'cung cấp gì',
+    'hỗ trợ gì',
+    'có cung cấp',
+    'có hỗ trợ',
+  ]
+  return patterns.some((pattern) => message.includes(pattern))
+}
+
 const isBasicInfoQuestion = (message) => {
   const patterns = [
-    // Operating hours patterns
     'giờ mở cửa gym',
     'gym mở cửa lúc mấy giờ',
     'giờ mở cửa',
@@ -328,8 +468,6 @@ const isBasicInfoQuestion = (message) => {
     'giờ làm việc',
     'gym mở cửa',
     'phòng gym mở cửa',
-
-    // Contact info patterns
     'liên hệ',
     'hotline',
     'số điện thoại',
@@ -338,63 +476,12 @@ const isBasicInfoQuestion = (message) => {
     'email',
     'gmail',
     'website',
-
-    // Policy patterns
     'quy định',
     'chính sách',
     'policy',
     'luật lệ',
     'quy tắc',
     'nội quy',
-  ]
-  return patterns.some((pattern) => message.includes(pattern))
-}
-
-const isPersonalAction = (message) => {
-  const patterns = [
-    // Personal ownership patterns
-    'của tôi',
-    'tôi có',
-    'tài khoản tôi',
-    'gói tôi',
-    'lịch tôi',
-    'membership tôi',
-    'lịch của mình',
-    'gói của mình',
-
-    // Registration patterns
-    'đăng ký',
-    'đăng ký gói',
-    'đăng ký lớp',
-    'đăng ký membership',
-    'register',
-    'tạo tài khoản',
-    'mở tài khoản',
-
-    // Booking patterns
-    'đặt lịch',
-    'book',
-    'đặt chỗ',
-    'đặt lịch trainer',
-    'đặt lịch tập',
-    'hẹn',
-    'thuê trainer',
-    'booking',
-
-    // Cancellation patterns
-    'hủy',
-    'hủy lịch',
-    'hủy đăng ký',
-    'cancel',
-    'hủy booking',
-
-    // Checking patterns
-    'kiểm tra',
-    'xem',
-    'check',
-    'kiểm tra gói',
-    'xem lịch',
-    'xem membership',
   ]
   return patterns.some((pattern) => message.includes(pattern))
 }

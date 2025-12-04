@@ -1,22 +1,15 @@
-// chatbot.service.js - Updated to use new simplified FAQ system
+// chatbot.service.js - Optimized version focusing on core functionality
 
 import { chatbotConversationModel } from '../model/chatbotConversation.model.js'
-import { chatbotActionModel } from '../model/chatbotAction.model.js'
-import { gymInfoModel } from '../model/gymInfo.model.js'
 import { userModel } from '~/modules/user/model/user.model.js'
 import { subscriptionModel } from '~/modules/subscription/model/subscription.model.js'
 import { sanitize } from '~/utils/utils.js'
-import CHATBOT_CONFIG, {
-  initializeGeminiClient,
-  updateTemplate,
-  getChatbotConfig,
-  validateMessage,
-} from '~/config/chatbot.config.js'
+import CHATBOT_CONFIG, { initializeGeminiClient, validateMessage } from '~/config/chatbot.config.js'
 
-// ✅ FIXED: Use correct named imports
+// Import core services
 import { classifyIntent } from './intent.classifier.js'
 import { handleFAQ } from './faq.service.js'
-import { handleAction } from './action/action.coordinator.js'
+import { handlePersonalInfo } from './personal.service.js'
 
 // Initialize Gemini client once at module level
 let geminiClient = null
@@ -40,27 +33,6 @@ const initializeAI = () => {
 // Helper functions
 const generateAnonymousId = () => `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-const validateMessageLength = (message) => {
-  const maxLength = getChatbotConfig('CONVERSATION.MAX_MESSAGE_LENGTH')
-  const minLength = getChatbotConfig('CONVERSATION.MIN_MESSAGE_LENGTH')
-
-  if (message.length > maxLength) {
-    return {
-      isValid: false,
-      error: `Tin nhắn quá dài! Vui lòng giới hạn trong ${maxLength} ký tự.`,
-    }
-  }
-
-  if (message.length < minLength) {
-    return {
-      isValid: false,
-      error: `Tin nhắn quá ngắn! Vui lòng nhập ít nhất ${minLength} ký tự.`,
-    }
-  }
-
-  return { isValid: true }
-}
 
 const getOrCreateConversation = async (userId, anonymousId, isAuthenticated) => {
   try {
@@ -93,31 +65,26 @@ const getOrCreateConversation = async (userId, anonymousId, isAuthenticated) => 
   }
 }
 
-// ✅ SIMPLIFIED: Main intent handling using new simple FAQ system
+// Main intent handling
 const handleIntent = async (intentResult, message, userId, conversationId, isAuthenticated) => {
-  const { category, specificIntent, faqCategory, confidence } = intentResult
+  const { category, specificIntent, confidence } = intentResult
 
-  console.log('🛠 Intent handling:', { category, specificIntent, faqCategory, confidence })
+  console.log('🛠 Intent handling:', { category, specificIntent, confidence })
 
-  // Route based on category (FAQ vs ACTION)
+  // Route based on category
   if (category === 'FAQ') {
-    return await handleFAQIntent(intentResult, message, userId)
-  } else if (category === 'ACTION') {
-    return await handleActionIntent(specificIntent, message, userId, isAuthenticated)
+    return await handleFAQIntent(message, userId)
+  } else if (category === 'PERSONAL') {
+    return await handlePersonalIntent(specificIntent, message, userId, isAuthenticated)
   } else {
     return getUnknownIntentResponse()
   }
 }
 
-// ✅ SIMPLIFIED: Handle FAQ intents using new simple system
-const handleFAQIntent = async (intentResult, message, userId = null) => {
+// Handle FAQ intents
+const handleFAQIntent = async (message, userId = null) => {
   try {
-    console.log('🛠 FAQ Intent handling:', intentResult)
-
-    // Use new simple FAQ system
     const faqResult = await handleFAQ(message, userId)
-
-    console.log('🛠 FAQ Result:', faqResult)
 
     if (faqResult && faqResult.content) {
       return {
@@ -127,7 +94,6 @@ const handleFAQIntent = async (intentResult, message, userId = null) => {
         data: faqResult.data || null,
       }
     } else {
-      console.warn('FAQ result invalid:', faqResult)
       return getErrorResponse()
     }
   } catch (error) {
@@ -136,89 +102,37 @@ const handleFAQIntent = async (intentResult, message, userId = null) => {
   }
 }
 
-// Handle ACTION intents - call action service or show login required
-const handleActionIntent = async (specificIntent, message, userId, isAuthenticated) => {
-  // SPECIAL CASE: register_account doesn't need authentication
-  if (specificIntent === 'register_account') {
-    const entities = extractEntitiesFromMessage(message)
-
-    try {
-      const actionResult = await handleAction(specificIntent, entities, null)
-      return actionResult
-    } catch (error) {
-      console.error('Register account error:', error)
-      return getActionComingSoonResponse(specificIntent)
-    }
-  }
-
-  // All other ACTIONs need authentication
+// Handle PERSONAL intents (requires authentication)
+const handlePersonalIntent = async (specificIntent, message, userId, isAuthenticated) => {
   if (!isAuthenticated) {
     return getLoginRequiredResponse(specificIntent)
   }
 
-  const entities = extractEntitiesFromMessage(message)
-
   try {
-    const actionResult = await handleAction(specificIntent, entities, userId)
-    return actionResult
+    const personalResult = await handlePersonalInfo(specificIntent, userId)
+    return personalResult
   } catch (error) {
-    console.error('Action intent handling error:', error)
-    return getActionComingSoonResponse(specificIntent)
+    console.error('Personal intent handling error:', error)
+    return getErrorResponse()
   }
-}
-
-// Simple entity extraction from message
-const extractEntitiesFromMessage = (message) => {
-  const entities = {
-    originalText: message,
-  }
-
-  // Extract confirmation
-  if (/xác nhận|đồng ý|ok|yes|có/i.test(message)) {
-    entities.confirmed = true
-  }
-
-  // Extract membership types
-  const messageLower = message.toLowerCase()
-  if (messageLower.includes('basic') || messageLower.includes('cơ bản')) {
-    entities.membershipType = 'basic'
-  } else if (messageLower.includes('premium') || messageLower.includes('cao cấp')) {
-    entities.membershipType = 'premium'
-  } else if (messageLower.includes('vip')) {
-    entities.membershipType = 'vip'
-  }
-
-  return entities
 }
 
 // Response helpers
-const getLoginRequiredResponse = (actionIntent) => {
+const getLoginRequiredResponse = (intent) => {
   const actionLabels = {
-    register_membership: 'đăng ký gói tập',
-    register_class: 'đăng ký lớp học',
-    check_membership: 'kiểm tra gói tập',
-    check_schedule: 'xem lịch cá nhân',
-    book_trainer: 'đặt lịch trainer',
-    cancel_booking: 'hủy lịch hẹn',
-    contact_staff: 'liên hệ staff',
-    requires_login: 'thực hiện hành động này',
+    check_membership: 'kiểm tra gói tập hiện tại',
+    check_schedule: 'xem lịch tập của bạn',
+    my_membership: 'xem thông tin membership',
+    my_schedule: 'xem lịch cá nhân',
   }
 
-  const actionLabel = actionLabels[actionIntent] || 'thực hiện hành động này'
+  const actionLabel = actionLabels[intent] || 'thực hiện hành động này'
 
   return {
-    content: `Để ${actionLabel}, bạn cần đăng nhập.\n\n🔐 ĐĂNG NHẬP ĐỂ:\n• Đặt lịch tập\n• Kiểm tra membership\n• Xem lịch cá nhân\n• Đăng ký lớp học\n\n💡 Sau khi đăng nhập, tôi sẽ giúp bạn ${actionLabel}!`,
+    content: `Để ${actionLabel}, bạn cần đăng nhập.\n\n🔐 ĐĂNG NHẬP ĐỂ:\n• Xem gói tập hiện tại\n• Kiểm tra lịch với PT/lớp học\n• Quản lý thông tin cá nhân\n\n💡 Sau khi đăng nhập, tôi sẽ giúp bạn ${actionLabel}!`,
     type: 'login_required',
-    actionIntent,
+    actionIntent: intent,
     requiresAuth: true,
-  }
-}
-
-const getActionComingSoonResponse = (actionIntent) => {
-  return {
-    content: `Tính năng "${actionIntent}" đang được phát triển.\n\n💪 Hiện tại bạn có thể:\n• Hỏi thông tin về gym\n• Xem các gói membership\n• Tìm hiểu về lớp học và trainer\n• Kiểm tra cơ sở gym\n\n📞 Vui lòng liên hệ staff để được hỗ trợ trực tiếp: 1900-1234`,
-    type: 'coming_soon',
-    actionIntent,
   }
 }
 
@@ -264,15 +178,12 @@ const saveMessage = async (conversationId, userMessage, botResponse, intentResul
   }
 }
 
-// ✅ MAIN: Processing function with simplified flow
+// Main processing function
 const processMessage = async (userId, message, anonymousId) => {
   try {
-    console.log('🛠 Processing message:', { userId, message, anonymousId })
-
     // Validate message
     const validation = validateMessage(message)
     if (!validation.valid) {
-      console.log('🛠 Message validation failed:', validation)
       return {
         success: false,
         response: {
@@ -284,19 +195,15 @@ const processMessage = async (userId, message, anonymousId) => {
 
     // Determine user type
     const isAuthenticated = !!userId
-    console.log('🛠 User authenticated:', isAuthenticated)
 
     // Get or create conversation
     const conversation = await getOrCreateConversation(userId, anonymousId, isAuthenticated)
-    console.log('🛠 Conversation:', conversation._id)
 
-    // Classify intent using simple classifier
+    // Classify intent
     const intentResult = classifyIntent(message)
-    console.log('🛠 Intent result:', intentResult)
 
     // Handle business logic
     const response = await handleIntent(intentResult, message, userId, conversation._id, isAuthenticated)
-    console.log('🛠 Intent response:', response)
 
     // Save message to conversation
     await saveMessage(conversation._id, message, response, intentResult)
@@ -309,9 +216,8 @@ const processMessage = async (userId, message, anonymousId) => {
       metadata: {
         category: intentResult.category,
         specificIntent: intentResult.specificIntent,
-        faqCategory: intentResult.faqCategory,
         confidence: intentResult.confidence,
-        needsAuth: intentResult.category === 'ACTION' && !userId && intentResult.specificIntent !== 'register_account',
+        needsAuth: intentResult.category === 'PERSONAL' && !userId,
       },
     }
   } catch (error) {
@@ -364,19 +270,14 @@ const getAnonymousConversationHistory = async (anonymousId, includeMessages = tr
       throw new Error('Anonymous ID is required')
     }
 
-    console.log('🛠 Getting anonymous conversation for:', anonymousId)
-
     const conversation = await chatbotConversationModel.getActiveConversationByUser(anonymousId, 'anonymous')
 
     if (!conversation) {
-      console.log('🛠 No anonymous conversation found for:', anonymousId)
       return {
         success: false,
         message: 'No anonymous conversation found',
       }
     }
-
-    console.log('🛠 Found anonymous conversation:', conversation._id)
 
     return {
       success: true,

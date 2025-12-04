@@ -1,38 +1,35 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { env } from './environment.config'
 
-// Chatbot Configuration - Đã bỏ phần Intent
+// Optimized Chatbot Configuration
 export const CHATBOT_CONFIG = {
   // Gemini AI Configuration
   AI: {
     API_KEY: env.GEMINI_API_KEY,
     MODEL_NAME: env.GEMINI_MODEL_NAME || 'gemini-1.5-flash',
     GENERATION_CONFIG: {
-      temperature: 0.7, // Tăng lên để response tự nhiên hơn
+      temperature: 0.7,
       topP: 0.9,
       topK: 40,
-      maxOutputTokens: 1024, // Tăng lên để đủ cho response phức tạp
+      maxOutputTokens: 1024,
       candidateCount: 1,
     },
     SYSTEM_PROMPT: `Bạn là trợ lý AI thông minh của phòng tập THE GYM. 
 
 NHIỆM VỤ:
 - Trả lời câu hỏi về gym một cách chính xác và hữu ích
-- Hỗ trợ người dùng thực hiện các hành động như đặt lịch, kiểm tra membership
+- Hỗ trợ thông tin cá nhân cho người dùng đã đăng nhập
 - Luôn thân thiện, chuyên nghiệp và tích cực
 
 QUY TẮC:
 - Luôn trả lời bằng tiếng Việt
 - Nếu không chắc chắn, thừa nhận và đề xuất liên hệ staff
-- Với các hành động quan trọng, cần xác nhận lại với người dùng
 - Đề xuất các lựa chọn phù hợp với nhu cầu người dùng`,
   },
 
-  // MongoDB Collection Names - Khớp với models đã tạo
+  // MongoDB Collection Names
   COLLECTIONS: {
     CONVERSATIONS: 'chatbot_conversations',
-    ACTIONS: 'chatbot_actions',
-    GYM_INFO: 'gym_info',
     USERS: 'users',
     SUBSCRIPTIONS: 'subscriptions',
     CLASSES: 'classes',
@@ -63,19 +60,19 @@ BẠN CÓ THỂ HỎI:
 - Quy định gym
 
 ĐĂNG NHẬP ĐỂ:
-- Đặt lịch tập
-- Kiểm tra membership
-- Xem lịch cá nhân
+- Xem gói tập hiện tại
+- Kiểm tra lịch cá nhân
+- Quản lý thông tin
 
 Bạn cần hỗ trợ gì?`,
 
     GREETING_AUTHENTICATED: `Xin chào {userName}!
 
 TÔI CÓ THỂ GIÚP:
-- Đặt lịch tập: 'Đặt lịch yoga'
-- Kiểm tra lịch trình: 'Lịch của tôi'
-- Thông tin trainer: 'Trainer nào rảnh?'
-- Hủy/đổi lịch
+- Xem gói membership: 'Gói tập của tôi'
+- Kiểm tra lịch: 'Lịch tập của tôi'
+- Thông tin gym: 'Giờ mở cửa'
+- Lớp học và trainer
 
 {membershipInfo}
 
@@ -85,7 +82,6 @@ Bạn cần gì hôm nay?`,
 
 BẠN CÓ THỂ:
 - Đăng nhập vào tài khoản
-- Đăng ký tài khoản mới
 - Tiếp tục chat để biết thông tin chung
 
 Sau khi đăng nhập, tôi sẽ giúp bạn {action}!`,
@@ -102,8 +98,8 @@ Cảm ơn bạn thông cảm!`,
     OUT_OF_SCOPE: `Tôi là trợ lý chuyên về gym và fitness.
 
 TÔI CÓ THỂ GIÚP:
-- Đặt lịch tập
-- Thông tin membership
+- Thông tin gym
+- Gói membership
 - Lịch trình lớp học
 - Thông tin trainer
 - Quy định gym
@@ -116,28 +112,13 @@ HỎI VỀ:
 - Giờ mở cửa gym
 - Thông tin liên hệ
 - Các gói membership
-- Quy định gym
+- Lớp học và trainer
 
 HOẶC NÓI:
-- 'Đặt lịch yoga'
-- 'Kiểm tra gói tập'
-- 'Trainer nào rảnh?'
+- 'Gói tập của tôi' (nếu đã đăng nhập)
+- 'Lịch tập của tôi' (nếu đã đăng nhập)
 
 Bạn cần hỗ trợ gì cụ thể?`,
-
-    ACTION_CONFIRMATION: `Xác nhận: Bạn muốn {action}, đúng không?
-
-Nhập 'Có' để xác nhận hoặc 'Không' để hủy.`,
-
-    ACTION_SUCCESS: `Đã hoàn thành {action} thành công!
-
-{details}`,
-
-    ACTION_FAILED: `Xin lỗi, không thể {action} lúc này.
-
-Lý do: {reason}
-
-Bạn có thể thử lại hoặc liên hệ staff: {hotline}`,
   },
 
   // Gym Info
@@ -175,9 +156,9 @@ Bạn có thể thử lại hoặc liên hệ staff: {hotline}`,
       MIN_LENGTH: 1,
       MAX_LENGTH: 1000,
       FORBIDDEN_PATTERNS: [
-        /(<script[\s\S]*?>[\s\S]*?<\/script>)/gi, // Script tags
-        /(javascript:)/gi, // JavaScript URLs
-        /(<iframe[\s\S]*?>[\s\S]*?<\/iframe>)/gi, // Iframe tags
+        /(<script[\s\S]*?>[\s\S]*?<\/script>)/gi,
+        /(javascript:)/gi,
+        /(<iframe[\s\S]*?>[\s\S]*?<\/iframe>)/gi,
       ],
     },
   },

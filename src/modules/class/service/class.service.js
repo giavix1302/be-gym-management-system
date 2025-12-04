@@ -120,6 +120,7 @@ const getListClassInfoForAdmin = async () => {
 const getListClassInfoForUser = async () => {
   try {
     const list = await classModel.getListClassInfoForUser()
+    console.log('🚀 ~ getListClassInfoForUser ~ list:', list)
 
     return {
       success: true,

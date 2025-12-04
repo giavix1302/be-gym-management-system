@@ -213,6 +213,7 @@ const getListTrainerForUser = async () => {
               fullName: '$user.fullName',
               avatar: '$user.avatar',
               email: '$user.email',
+              phone: '$user.phone',
             },
             trainerInfo: {
               specialization: '$specialization',

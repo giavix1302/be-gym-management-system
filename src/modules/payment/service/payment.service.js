@@ -20,7 +20,7 @@ import {
   idFromTimestamp,
 } from '~/utils/utils'
 import { env } from '~/config/environment.config'
-import { deleteLinkPaymentTemp, getLinkPaymentTemp, saveLinkPaymentTemp } from '~/utils/redis'
+import { deleteLinkPaymentTemp, getLinkPaymentTemp, saveLinkPaymentTemp, savePaymentWithExpiry } from '~/utils/redis'
 import { bookingModel } from '~/modules/booking/model/booking.model'
 import { bookingService } from '~/modules/booking/service/booking.service'
 import { classEnrollmentModel } from '~/modules/classEnrollment/model/classEnrollment.model'
@@ -29,12 +29,9 @@ import { classSessionModel } from '~/modules/classSession/model/classSession.mod
 import { userModel } from '~/modules/user/model/user.model'
 import { paymentStatisticsModel } from '../model/paymentStatistics.model'
 
-const createPaymentVnpay = async (params) => {
+const createPaymentVnpay = async (body) => {
   try {
-    // info sub
-    const subscriptionInfo = await subscriptionModel.getDetailById(params.id)
-    const { membershipId, userId } = subscriptionInfo
-    console.log('🚀 ~ createPaymentVnpay ~ membershipId:', membershipId)
+    const { membershipId, userId } = body
 
     // price, SubId, mess
     const membershipInfo = await membershipModel.getDetailById(membershipId.toString())
@@ -45,9 +42,10 @@ const createPaymentVnpay = async (params) => {
     // create payment url: subId, price, name
     const paymentUrl = createPaymentURL(id, calculateDiscountedPrice(price, discount).finalPrice, name)
 
-    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
+    const expireAt = new Date(Date.now() + 30 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
-      subId: params.id,
+      membershipId,
+      userId,
       paymentUrl,
       paymentType: PAYMENT_TYPE.MEMBERSHIP,
       expireAt: expireAt.toISOString(),
@@ -73,9 +71,15 @@ const createPaymentBookingPtVnpay = async (data) => {
 
     const totalPrice = dataArr.reduce((sum, item) => sum + item.price, 0)
 
+    // Tạo các booking
     for (const dataBooking of dataArr) {
       const result = await bookingService.createBooking(dataBooking)
       if (!result.success) {
+        // Nếu có lỗi, rollback các booking đã tạo
+        if (idBookingArr.length > 0) {
+          console.log('❌ Error creating booking, rolling back created bookings:', idBookingArr)
+          await bookingModel.deleteMultiplePendingBookings(idBookingArr)
+        }
         return {
           ...result,
         }
@@ -83,31 +87,42 @@ const createPaymentBookingPtVnpay = async (data) => {
       idBookingArr.push(result.bookingId)
     }
 
+    // Tạo title cho payment
     if (dataArr.length === 1) {
       titlePayment = dataArr[0].title
     } else {
-      titlePayment = dataArr.length + 'buổi huấn luyện 1 kèm 1'
+      titlePayment = dataArr.length + ' buổi huấn luyện 1 kèm 1'
     }
 
     const id = idFromTimestamp()
-
     const paymentUrl = createPaymentURL(id, totalPrice, titlePayment)
-    console.log('🚀 ~ createPaymentBookingPtVnpay ~ totalPrice:', totalPrice)
 
-    // tạo 1 mảng lưu id trong redis
-    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
+    console.log('🚀 ~ createPaymentBookingPtVnpay ~ totalPrice:', totalPrice)
+    console.log('🚀 ~ createPaymentBookingPtVnpay ~ idBookingArr:', idBookingArr)
+
+    // SỬA: Dùng saveLinkPaymentTemp() như cũ (đã có backup mechanism)
+    const expireAt = new Date(Date.now() + 5 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
       idBookingArr,
       paymentUrl,
       paymentType: PAYMENT_TYPE.BOOKING,
       expireAt: expireAt.toISOString(),
+      totalPrice,
+      titlePayment,
+      createdAt: new Date().toISOString(),
     })
+
+    console.log(`💳 Payment created: ${id} with ${idBookingArr.length} bookings, expires in 30 minutes`)
 
     return {
       success: true,
       paymentUrl,
+      paymentId: id,
+      bookingIds: idBookingArr,
+      expiresAt: expireAt.toISOString(),
     }
   } catch (error) {
+    console.error('❌ Error in createPaymentBookingPtVnpay:', error)
     throw new Error(error)
   }
 }
@@ -133,7 +148,7 @@ const createPaymentClassVnpay = async (data) => {
     const paymentUrl = createPaymentURL(id, price, title)
 
     // tạo 1 mảng lưu id trong redis
-    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
+    const expireAt = new Date(Date.now() + 30 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
       userId,
       classId,
@@ -160,11 +175,16 @@ const vnpReturn = async (query) => {
     const dataToSaveRedis = await getLinkPaymentTemp(vnp_TxnRef)
     console.log('🚀 ~ vnpReturn ~ dataToSaveRedis:', dataToSaveRedis)
 
+    if (dataToSaveRedis.paymentType === null) {
+      return {
+        success: false,
+        url: `${env.FE_URL}/user/payment/failed`,
+      }
+    }
+
     if (dataToSaveRedis.paymentType === PAYMENT_TYPE.MEMBERSHIP) {
-      const { subId } = dataToSaveRedis
+      const { membershipId, userId } = dataToSaveRedis
       if (vnp_TransactionStatus === '02') {
-        // xóa subscription
-        await subscriptionModel.deleteSubscription(subId)
         await deleteLinkPaymentTemp(vnp_TxnRef)
 
         return {
@@ -174,16 +194,30 @@ const vnpReturn = async (query) => {
       }
 
       // get membershipId, userId
-      const subscriptionInfo = await subscriptionModel.getDetailById(subId)
-      const { userId, membershipId } = subscriptionInfo
+      // const subscriptionInfo = await subscriptionModel.getDetailById(subId)
+      // const { userId, membershipId } = subscriptionInfo
+      // create subscription
       const membershipInfo = await membershipModel.getDetailById(membershipId)
       const { durationMonth } = membershipInfo
+
       const userInfo = await userModel.getDetailById(userId)
+
+      const dataToCreateSubscription = {
+        userId,
+        membershipId,
+        startDate: convertVnpayDateToISO(vnp_PayDate),
+        endDate: calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth),
+        status: SUBSCRIPTION_STATUS.ACTIVE,
+        paymentStatus: PAYMENT_STATUS.PAID,
+        remainingSessions: countRemainingDays(calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth)),
+      }
+
+      const subInfo = await subscriptionModel.createNew(dataToCreateSubscription)
 
       // create payment: userId, price, refId, paymentType, method, description
       const dataToSave = {
         userId: userId.toString(),
-        referenceId: subId,
+        referenceId: subInfo.insertedId.toString(),
         paymentType: PAYMENT_TYPE.MEMBERSHIP,
         amount: vnp_Amount,
         paymentDate: convertVnpayDateToISO(vnp_PayDate),
@@ -192,17 +226,6 @@ const vnpReturn = async (query) => {
       }
       console.log('🚀 ~ vnpReturn ~ dataToSave:', dataToSave)
       await paymentModel.createNew(dataToSave)
-
-      // update subscription
-      const dataUpdateSub = {
-        startDate: convertVnpayDateToISO(vnp_PayDate),
-        endDate: calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth),
-        status: SUBSCRIPTION_STATUS.ACTIVE,
-        paymentStatus: PAYMENT_STATUS.PAID,
-        remainingSessions: countRemainingDays(calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth)),
-      }
-
-      await subscriptionModel.updateInfoWhenPaymentSuccess(subId, dataUpdateSub)
 
       const updateStatusUser = {
         status: STATUS_TYPE.ACTIVE,
@@ -323,6 +346,26 @@ const getPaymentsByUserId = async (userId, page = 1, limit = 10) => {
     return {
       success: true,
       ...result,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const updateRefundPayment = async (_id, data) => {
+  console.log('🚀 ~ updateRefundPayment ~ data:', data)
+  try {
+    const dataToUpdate = {
+      ...data,
+      refundDate: new Date().toISOString(),
+    }
+    console.log('🚀 ~ updateRefundPayment ~ dataToUpdate:', dataToUpdate)
+    const result = await paymentModel.updatePaymentById(_id, dataToUpdate)
+
+    return {
+      success: true,
+      message: 'Refund Successfully',
+      result,
     }
   } catch (error) {
     throw new Error(error)
@@ -502,6 +545,7 @@ export const paymentService = {
   createPaymentBookingPtVnpay,
   createPaymentClassVnpay,
   vnpReturn,
+  updateRefundPayment,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
 

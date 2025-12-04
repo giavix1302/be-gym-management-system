@@ -1,4 +1,6 @@
+import { paymentModel } from '~/modules/payment/model/payment.model'
 import { classEnrollmentModel } from '../model/classEnrollment.model'
+import { PAYMENT_STATUS } from '~/utils/constants'
 
 const addClassEnrollment = async (data) => {
   try {
@@ -86,9 +88,40 @@ const deleteClassEnrollment = async (enrollmentId) => {
   }
 }
 
+const cancelClassEnrollment = async (enrollmentId) => {
+  try {
+    // check xem có được refund không
+    const isRefund = await classEnrollmentModel.canCancelEnrollment(enrollmentId)
+    if (isRefund) {
+      await paymentModel.updatePaymentByReferenceId(enrollmentId, {
+        paymentStatus: PAYMENT_STATUS.REFUNDED,
+      })
+    }
+
+    const result = await classEnrollmentModel.cancelEnrollment(enrollmentId)
+
+    // Check if enrollment exists and was updated
+    if (!result || result.value === null) {
+      return {
+        success: false,
+        message: 'Class enrollment does not exist or could not be cancelled.',
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Class enrollment cancelled successfully',
+      enrollment: result.value,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const classEnrollmentService = {
   addClassEnrollment,
   getListClassEnrollment,
   updateClassEnrollment,
   deleteClassEnrollment,
+  cancelClassEnrollment,
 }

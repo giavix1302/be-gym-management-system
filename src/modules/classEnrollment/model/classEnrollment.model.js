@@ -53,31 +53,49 @@ const createNew = async (data) => {
   }
 }
 
-const getDetailById = async (membershipId) => {
+const getDetailById = async (classEnrollmentId) => {
   try {
     const db = await GET_DB()
     const detail = await db
       .collection(CLASS_ENROLLMENT_COLLECTION_NAME)
       .aggregate([
         {
-          $match: { _id: new ObjectId(String(membershipId)) },
+          $match: { _id: new ObjectId(String(classEnrollmentId)) },
         },
         {
           $lookup: {
-            from: subscriptionModel.SUBSCRIPTION_COLLECTION_NAME,
-            localField: '_id',
-            foreignField: 'membershipId',
-            as: 'subscriptions',
+            from: 'classes',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classInfo',
           },
         },
         {
-          $addFields: {
-            totalUsers: { $size: '$subscriptions' },
+          $unwind: {
+            path: '$classInfo',
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
-          $project: {
-            subscriptions: 0, // bá» chi tiáº¿t subscriptions cho gá»n
+          $lookup: {
+            from: 'locations',
+            localField: 'classInfo.locationId',
+            foreignField: '_id',
+            as: 'classInfo.location',
+          },
+        },
+        {
+          $unwind: {
+            path: '$classInfo.location',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'classInfo.trainers',
+            foreignField: '_id',
+            as: 'classInfo.trainerDetails',
           },
         },
       ])
@@ -119,7 +137,7 @@ const getListWithQuantityUser = async () => {
         },
         {
           $project: {
-            subscriptions: 0, // khÃ´ng cáº§n tráº£ vá» subscriptions chi tiáº¿t
+            subscriptions: 0, // khÃ´ng cáº§n tráº£ vá» subscriptions chi tiáº¿t
           },
         },
       ])
@@ -235,12 +253,12 @@ const checkScheduleConflict = async (userId, classId) => {
   }
 }
 
-const updateInfo = async (membershipId, updateData) => {
+const updateInfo = async (classEnrollmentId, updateData) => {
   try {
     const updatedMembership = await GET_DB()
       .collection(CLASS_ENROLLMENT_COLLECTION_NAME)
       .findOneAndUpdate(
-        { _id: new ObjectId(String(membershipId)) },
+        { _id: new ObjectId(String(classEnrollmentId)) },
         { $set: updateData },
         { returnDocument: 'after' }
       )
@@ -250,14 +268,76 @@ const updateInfo = async (membershipId, updateData) => {
   }
 }
 
-const deleteMembership = async (membershipId) => {
+const cancelEnrollment = async (classEnrollmentId) => {
   try {
-    const result = await GET_DB()
+    const cancelledEnrollment = await GET_DB()
       .collection(CLASS_ENROLLMENT_COLLECTION_NAME)
-      .deleteOne({ _id: new ObjectId(String(membershipId)) })
-    return result.deletedCount
+      .findOneAndUpdate(
+        { _id: new ObjectId(String(classEnrollmentId)) },
+        {
+          $set: {
+            status: CLASS_ENROLLMENT_STATUS.CANCELLED,
+            updatedAt: Date.now(),
+          },
+        },
+        { returnDocument: 'after' }
+      )
+    return cancelledEnrollment
   } catch (error) {
     throw new Error(error)
+  }
+}
+
+const canCancelEnrollment = async (classEnrollmentId) => {
+  try {
+    const enrollment = await GET_DB()
+      .collection(CLASS_ENROLLMENT_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            _id: new ObjectId(String(classEnrollmentId)),
+            _destroy: false,
+          },
+        },
+        {
+          $lookup: {
+            from: 'classes',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'class',
+          },
+        },
+        {
+          $unwind: '$class',
+        },
+        {
+          $project: {
+            startDate: '$class.startDate',
+            endDate: '$class.endDate',
+            status: 1,
+          },
+        },
+      ])
+      .toArray()
+
+    if (!enrollment || enrollment.length === 0) {
+      return false
+    }
+
+    const enrollmentData = enrollment[0]
+
+    // Kiểm tra xem enrollment đã bị hủy chưa
+    if (enrollmentData.status === CLASS_ENROLLMENT_STATUS.CANCELLED) {
+      return false
+    }
+
+    const now = new Date()
+    const startDate = new Date(enrollmentData.startDate)
+
+    // Trả về true nếu trước thời gian bắt đầu, false nếu sau thời gian bắt đầu
+    return now < startDate
+  } catch (error) {
+    throw new Error(`Error checking enrollment cancellation: ${error.message}`)
   }
 }
 
@@ -270,5 +350,6 @@ export const classEnrollmentModel = {
   getListWithQuantityUser,
   checkScheduleConflict,
   updateInfo,
-  deleteMembership,
+  cancelEnrollment,
+  canCancelEnrollment,
 }

@@ -305,12 +305,23 @@ const getListClassInfoForUser = async () => {
             as: 'sessions',
           },
         },
-        // Lookup rooms for class sessions
+        // Lookup rooms for class sessions AND recurrence
         {
           $lookup: {
             from: roomModel.ROOM_COLLECTION_NAME,
-            localField: 'sessions.roomId',
-            foreignField: '_id',
+            let: {
+              sessionRoomIds: '$sessions.roomId',
+              recurrenceRoomIds: '$recurrence.roomId',
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [{ $in: ['$_id', '$$sessionRoomIds'] }, { $in: ['$_id', '$$recurrenceRoomIds'] }],
+                  },
+                },
+              },
+            ],
             as: 'roomDetails',
           },
         },
@@ -432,6 +443,36 @@ const getListClassInfoForUser = async () => {
                 },
               },
             },
+            // Process recurrence with room names
+            processedRecurrence: {
+              $map: {
+                input: '$recurrence',
+                as: 'rec',
+                in: {
+                  $let: {
+                    vars: {
+                      roomInfo: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: '$roomDetails',
+                              cond: { $eq: ['$$this._id', '$$rec.roomId'] },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    },
+                    in: {
+                      dayOfWeek: '$$rec.dayOfWeek',
+                      startTime: '$$rec.startTime',
+                      endTime: '$$rec.endTime',
+                      roomName: { $ifNull: ['$$roomInfo.name', ''] },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         // Lookup user details for trainers
@@ -499,7 +540,7 @@ const getListClassInfoForUser = async () => {
               province: { $ifNull: ['$locationInfo.address.province', ''] },
             },
             trainers: 1,
-            recurrence: 1,
+            recurrence: '$processedRecurrence',
             classSession: '$processedSessions',
           },
         },
@@ -1300,6 +1341,7 @@ const getMemberEnrolledClasses = async (userId) => {
         {
           $match: {
             userId: userObjectId,
+            status: { $ne: 'cancelled' },
             _destroy: false,
           },
         },
@@ -1517,6 +1559,7 @@ const getMemberEnrolledClasses = async (userId) => {
               province: { $ifNull: ['$locationInfo.address.province', ''] },
             },
             classSession: 1,
+            classEnrollmentId: '$_id',
           },
         },
         // Sort by enrollment date (most recent first)

@@ -64,6 +64,67 @@ const getDetail = async (userId) => {
   }
 }
 
+const getDetailByReferenceId = async (referenceId) => {
+  try {
+    const payment = GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .findOne({
+        referenceId: new ObjectId(String(referenceId)),
+      })
+    return payment
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const updatePaymentByReferenceId = async (referenceId, updateData) => {
+  try {
+    const updatedPayment = await GET_DB()
+      .collection('payments')
+      .findOneAndUpdate(
+        {
+          referenceId: new ObjectId(String(referenceId)),
+          _destroy: false,
+        },
+        {
+          $set: {
+            ...updateData,
+            updatedAt: Date.now(),
+          },
+        },
+        { returnDocument: 'after' }
+      )
+
+    return updatedPayment
+  } catch (error) {
+    throw new Error(`Error updating payment by referenceId: ${error.message}`)
+  }
+}
+
+const updatePaymentById = async (_id, updateData) => {
+  try {
+    const updatedPayment = await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .findOneAndUpdate(
+        {
+          _id: new ObjectId(String(_id)),
+          _destroy: false,
+        },
+        {
+          $set: {
+            ...updateData,
+            updatedAt: Date.now(),
+          },
+        },
+        { returnDocument: 'after' }
+      )
+
+    return updatedPayment
+  } catch (error) {
+    throw new Error(`Error updating payment by referenceId: ${error.message}`)
+  }
+}
+
 // Lấy danh sách payment theo userId với pagination
 const getPaymentsByUserId = async (userId, page = 1, limit = 10) => {
   try {
@@ -494,14 +555,34 @@ const getRevenueByPaymentType = async (year = new Date().getFullYear()) => {
   }
 }
 
+const getPendingRefundCount = async () => {
+  try {
+    const pendingRefundCount = await GET_DB().collection(PAYMENT_COLLECTION_NAME).countDocuments({
+      _destroy: false,
+      paymentStatus: PAYMENT_STATUS.REFUNDED,
+      refundAmount: 0,
+      refundDate: '',
+    })
+
+    return pendingRefundCount
+  } catch (error) {
+    throw new Error(`Error getting pending refund count: ${error.message}`)
+  }
+}
+
 export const paymentModel = {
   PAYMENT_COLLECTION_NAME,
   PAYMENT_COLLECTION_SCHEMA,
   createNew,
   getDetail,
+  updatePaymentById,
   getPaymentsByUserId,
   getAllPaymentsForAdmin,
   getTotalRevenueByYear,
   getRevenueChartData,
   getRevenueByPaymentType,
+  getDetailByReferenceId,
+
+  updatePaymentByReferenceId,
+  getPendingRefundCount,
 }

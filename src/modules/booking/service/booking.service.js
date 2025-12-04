@@ -4,9 +4,10 @@ import { userModel } from '~/modules/user/model/user.model'
 import { conversationModel } from '~/modules/conversation/model/conversation.model'
 import { notificationService } from '~/modules/notification/service/notification.service'
 import { socketService } from '~/utils/socket.service'
-import { BOOKING_STATUS } from '~/utils/constants.js'
+import { BOOKING_STATUS, PAYMENT_STATUS } from '~/utils/constants.js'
 import { sanitize } from '~/utils/utils'
 import { locationModel } from '~/modules/location/model/location.model'
+import { paymentModel } from '~/modules/payment/model/payment.model'
 
 const createBooking = async (data) => {
   try {
@@ -201,6 +202,13 @@ const cancelBooking = async (bookingId) => {
       return { success: false, message: 'Booking is already cancelled' }
     }
 
+    if (!bookingModel.canCancelBooking(bookingId)) {
+      return {
+        success: false,
+        message: 'Không được hủy vì đã gần đến ngày tập',
+      }
+    }
+
     // Xóa notifications liên quan trước khi cancel booking
     await notificationService.deleteNotificationsByReference(bookingId, 'BOOKING')
 
@@ -210,31 +218,16 @@ const cancelBooking = async (bookingId) => {
 
     const result = await bookingModel.updateInfo(bookingId, dataToUpdate)
 
-    // Notify both user and trainer about cancellation
-    try {
-      const userId = isBookingExist.userId.toString()
-      const scheduleInfo = await scheduleModel.getDetailById(isBookingExist.scheduleId)
-      const trainerId = scheduleInfo.trainerId.toString()
+    // refund
+    // find payment
+    const isRefund = await bookingModel.canCancelBooking(bookingId)
+    console.log('🚀 ~ cancelBooking ~ isCancel:', isRefund)
 
-      // Notify user
-      if (socketService.isUserOnline(userId)) {
-        socketService.sendToUser(userId, 'booking_cancelled', {
-          bookingId,
-          message: 'Booking đã bị hủy',
-        })
-      }
-
-      // Notify trainer
-      if (socketService.isUserOnline(trainerId)) {
-        const userInfo = await userModel.getDetailById(userId)
-        socketService.sendToUser(trainerId, 'booking_cancelled', {
-          bookingId,
-          user: sanitize(userInfo),
-          message: `Booking từ ${userInfo.fullName} đã bị hủy`,
-        })
-      }
-    } catch (notificationError) {
-      console.log('⚠️ ~ Failed to send cancellation notification:', notificationError.message)
+    // Chỉ cập nhật payment nếu tồn tại
+    if (isRefund) {
+      await paymentModel.updatePaymentByReferenceId(bookingId, {
+        paymentStatus: PAYMENT_STATUS.REFUNDED,
+      })
     }
 
     return {
@@ -343,6 +336,7 @@ const getUpcomingBookingsByUserId = async (userId) => {
     if (isUserExist === null) return { success: false, message: 'User not found' }
 
     const bookings = await bookingModel.getUpcomingBookingsByUserId(userId)
+    console.log('🚀 ~ getUpcomingBookingsByUserId ~ bookings:', bookings)
 
     return {
       success: true,

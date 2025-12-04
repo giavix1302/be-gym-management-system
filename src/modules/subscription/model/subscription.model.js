@@ -16,7 +16,6 @@ const SUBSCRIPTION_COLLECTION_SCHEMA = Joi.object({
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
-  expireAt: Joi.date().default(() => new Date(Date.now() + 10 * 60 * 1000)), // field TTL
   _destroy: Joi.boolean().default(false),
 })
 
@@ -24,15 +23,6 @@ const validateBeforeCreate = async (data) => {
   return await SUBSCRIPTION_COLLECTION_SCHEMA.validateAsync(data, {
     abortEarly: false,
   })
-}
-
-const createIndexes = async () => {
-  try {
-    await GET_DB().collection(SUBSCRIPTION_COLLECTION_NAME).createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 })
-    console.log('✅ TTL index created for subscriptions.expireAt')
-  } catch (error) {
-    console.error('❌ Error creating TTL index:', error)
-  }
 }
 
 const createNew = async (data) => {
@@ -446,7 +436,6 @@ const getSubscriptionsExpiringInDays = async (days = 7) => {
 export const subscriptionModel = {
   SUBSCRIPTION_COLLECTION_NAME,
   SUBSCRIPTION_COLLECTION_SCHEMA,
-  createIndexes,
   createNew,
   getDetailById,
   updateInfo,

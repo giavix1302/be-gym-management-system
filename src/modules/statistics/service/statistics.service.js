@@ -33,6 +33,8 @@ const getDataDashboardForAdmin = async () => {
 
     const revenueByPaymentType = await paymentModel.getRevenueByPaymentType()
 
+    const pendingRefundCount = await paymentModel.getPendingRefundCount()
+
     return {
       success: true,
       message: '',
@@ -55,6 +57,7 @@ const getDataDashboardForAdmin = async () => {
           lowEnrollmentClasses: lowEnrollmentClasses, // classes  + ClassEnrollments
           equipmentIssues: equipmentIssues, // equipments
           membershipExpiring: membershipExpiring, // subscription
+          pendingRefundCount: pendingRefundCount,
         },
         revenueBreakdown: revenueByPaymentType,
       },

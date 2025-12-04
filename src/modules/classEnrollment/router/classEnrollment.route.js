@@ -12,4 +12,6 @@ Router.route('/:id')
   .put(authMiddleware, classEnrollmentController.updateClassEnrollment)
   .delete(authMiddleware, classEnrollmentController.deleteClassEnrollment)
 
+Router.route('/:id/cancel').patch(authMiddleware, classEnrollmentController.cancelClassEnrollment)
+
 export const classEnrollmentRoute = Router

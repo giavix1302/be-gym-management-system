@@ -59,9 +59,26 @@ const deleteClassEnrollment = async (req, res, next) => {
   }
 }
 
+const cancelClassEnrollment = async (req, res, next) => {
+  try {
+    const enrollmentId = req.params.id
+
+    const result = await classEnrollmentService.cancelClassEnrollment(enrollmentId)
+
+    if (result.success) {
+      res.status(StatusCodes.OK).json(result)
+    } else {
+      res.status(StatusCodes.UNPROCESSABLE_ENTITY).json(result)
+    }
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const classEnrollmentController = {
   addClassEnrollment,
   updateClassEnrollment,
   deleteClassEnrollment,
   getListClassEnrollment,
+  cancelClassEnrollment,
 }
