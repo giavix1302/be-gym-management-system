@@ -14,10 +14,7 @@ const login = async (req, res, next) => {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
       })
 
-      // Xóa refreshToken khỏi response body
-      const { refreshToken, ...safeResult } = result
-
-      return res.status(StatusCodes.OK).json(safeResult)
+      return res.status(StatusCodes.OK).json(result)
     } else {
       return res.status(StatusCodes.UNAUTHORIZED).json(result)
     }

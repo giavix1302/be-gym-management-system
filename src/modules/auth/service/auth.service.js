@@ -1,3 +1,4 @@
+/* eslint-disable indent */
 import { sendOtpService, verifyOtp } from '~/utils/twilio.js'
 import { handleHashedPassword, isMatch } from '~/utils/bcrypt.js'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '~/utils/jwt.js'
@@ -88,11 +89,24 @@ const login = async (reqBody) => {
 
     if (account.role === 'pt') {
       const trainerInfo = await trainerService.getDetailByUserId(account._id)
+      const subscriptionInfo = await subscriptionService.getSubDetailByUserId(account._id)
 
       return {
         success: true,
         message: 'Signed in successfully.',
         user: sanitize(account),
+        myMembership: !subscriptionInfo.success
+          ? {
+              remainingSessions: 0,
+              startDate: '',
+              endDate: '',
+              status: '',
+              name: '',
+              durationMonth: 0,
+              bannerURL: '',
+              totalCheckin: 0,
+            }
+          : subscriptionInfo.subscription,
         trainer: {
           ...trainerInfo.trainer,
         },
