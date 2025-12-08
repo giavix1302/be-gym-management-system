@@ -6,7 +6,7 @@ import { sanitize } from '~/utils/utils'
 const createNew = async (reqBody) => {
   try {
     const createdUser = await userModel.createNew(reqBody)
-    const getNewUser = await userModel.getDetail(createdUser.insertedId)
+    const getNewUser = await userModel.getDetailById(createdUser.insertedId)
     return getNewUser
   } catch (error) {
     throw new Error(error)
@@ -15,7 +15,7 @@ const createNew = async (reqBody) => {
 
 const getDetail = async (userId) => {
   try {
-    const user = await userModel.getDetail(userId)
+    const user = await userModel.getDetailById(userId)
     return user
   } catch (error) {
     throw new Error(error)
