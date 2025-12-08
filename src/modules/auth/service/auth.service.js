@@ -52,6 +52,7 @@ const login = async (reqBody) => {
           message: 'Signed in successfully.',
           user: sanitize(account),
           myMembership: {
+            _id: '',
             remainingSessions: 0,
             startDate: '',
             endDate: '',
@@ -65,14 +66,16 @@ const login = async (reqBody) => {
           refreshToken, // controller sẽ set cookie
         }
 
-      const { remainingSessions, startDate, endDate, status, name, durationMonth, bannerURL } =
+      const { remainingSessions, startDate, endDate, status, name, durationMonth, bannerURL, _id } =
         subscriptionInfo.subscription
+      console.log('🚀 ~ login ~ subscriptionInfo.subscription.result:', subscriptionInfo.subscription)
 
       return {
         success: true,
         message: 'Signed in successfully.',
         user: sanitize(account),
         myMembership: {
+          _id,
           remainingSessions,
           startDate,
           endDate,
@@ -97,6 +100,7 @@ const login = async (reqBody) => {
         user: sanitize(account),
         myMembership: !subscriptionInfo.success
           ? {
+              _id: '',
               remainingSessions: 0,
               startDate: '',
               endDate: '',

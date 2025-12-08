@@ -125,6 +125,7 @@ const getSubDetailByUserId = async (userId) => {
         success: false,
         message: 'Subscription not found',
         myMembership: {
+          _id: '',
           remainingSessions: 0,
           startDate: '',
           endDate: '',
@@ -159,20 +160,12 @@ const getSubDetailByUserId = async (userId) => {
 
     const { name, durationMonth, bannerURL } = membershipInfo
 
-    let paymentInfo = {}
-    // check thanh toán chưa
-    if (result.paymentStatus === PAYMENT_STATUS.UNPAID) {
-      const data = await getLinkPaymentTemp(_id)
-      paymentInfo = { ...data }
-    }
-
     const dataFinal = {
-      ...sanitize(result),
+      ...result,
       name,
       durationMonth,
       bannerURL,
       totalCheckin: 0,
-      ...(result.paymentStatus === PAYMENT_STATUS.UNPAID && { paymentInfo }),
     }
 
     return {
