@@ -22,6 +22,10 @@ const START_APP = () => {
   // Tạo HTTP server để có thể tích hợp Socket.IO
   const server = createServer(app)
 
+  // Trust proxy - Required for rate limiting behind nginx/load balancer
+  // This enables Express to trust X-Forwarded-* headers
+  app.set('trust proxy', 1)
+
   // Middleware xử lý JSON body
   app.use(express.json())
 
