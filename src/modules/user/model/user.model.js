@@ -1,3 +1,4 @@
+/* eslint-disable indent */
 import { ObjectId, ReturnDocument } from 'mongodb'
 import Joi from 'joi'
 import { GET_DB } from '~/config/mongodb.config.js'
@@ -638,36 +639,203 @@ const getTotalActiveUsers = async () => {
   }
 }
 
-const getUserEventsForThreeMonths = async (userId) => {
+// Helper: convert ISO week number to date (Monday of that week)
+const getDateFromISOWeek = (year, week) => {
+  // ISO weeks start on Monday; set to the first Monday of the year then advance by (week-1)
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7))
+  const dayOfWeek = simple.getUTCDay() || 7 // Sunday returns 0, change to 7
+  if (dayOfWeek !== 1) {
+    // Shift back to Monday
+    simple.setUTCDate(simple.getUTCDate() + 1 - dayOfWeek)
+  }
+  return simple
+}
+
+const getUserEventsForThreeMonths = async (userId, options = {}) => {
   try {
-    // Tính toán khoảng thời gian 3 tháng
-    const now = new Date()
-    const currentMonth = now.getMonth()
-    const currentYear = now.getFullYear()
+    // ========== DESTRUCTURE OPTIONS VỚI GIÁ TRỊ MẶC ĐỊNH ==========
+    const {
+      // FILTER THEO THỜI GIAN
+      viewType = 'threeMonths', // 'day' | 'week' | 'month' | 'threeMonths' | 'range'
+      date = new Date(), // Ngày làm mốc (cho day/week/month)
+      year = null, // Năm cụ thể (ví dụ: 2025)
+      month = null, // Tháng cụ thể (1-12)
+      week = null, // {number|null} Tuần trong năm (1-53, ISO week). VD: 43, 1, 52
+      startDate = null, // {Date|string|null} Ngày bắt đầu (cho range). VD: new Date('2025-12-01'), '2025-12-01', new Date()
+      endDate = null, // {Date|string|null} Ngày kết thúc (cho range). VD: new Date('2025-12-31'), '2025-12-31', new Date()
 
-    // Tháng trước
-    const startDate = new Date(currentYear, currentMonth - 1, 1)
+      // FILTER THEO LOẠI SỰ KIỆN
+      eventTypes = [], // ['booking', 'classSession'] - Rỗng = lấy tất cả
 
-    // Tháng sau (cuối tháng)
-    const endDate = new Date(currentYear, currentMonth + 2, 0, 23, 59, 59, 999)
+      // FILTER THEO ĐỊA ĐIỂM
+      locationIds = [], // Array ObjectId của locations
+      locationNames = [], // Array tên locations
 
-    const startISO = startDate.toISOString()
-    const endISO = endDate.toISOString()
+      // FILTER THEO TRAINER
+      trainerIds = [], // Array ObjectId của trainers
+      trainerNames = [], // Array tên trainers
 
-    console.log('Date range:', { startISO, endISO })
+      // FILTER THEO PHÒNG (chỉ cho classSession)
+      roomIds = [], // Array ObjectId của rooms
+      roomNames = [], // Array tên rooms
+
+      // SẮP XẾP
+      sortBy = 'startTime', // 'startTime' | 'endTime' | 'title'
+      sortOrder = 'asc', // 'asc' | 'desc'
+
+      // PHÂN TRANG
+      page = null, // Số trang (null = không phân trang)
+      limit = null, // Số lượng mỗi trang
+
+      // LOẠI TRỪ SỰ KIỆN QUÁ KHỨ
+      includePastEvents = true, // Có lấy sự kiện đã qua không
+
+      // TIMEZONE (để convert nếu cần)
+      timezone = 'Asia/Ho_Chi_Minh',
+    } = options
+
+    // ========== TÍNH TOÁN KHOẢNG THỜI GIAN ==========
+    let startISO, endISO
+
+    switch (viewType) {
+      case 'day': {
+        // Lấy sự kiện trong 1 ngày
+        const targetDate = date
+        const start = new Date(targetDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(targetDate)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'week': {
+        // Lấy sự kiện trong 1 tuần (ISO week: Thứ 2 - Chủ nhật)
+        let targetDate
+
+        if (year && week) {
+          // Nếu có year và week, tính toán ngày đầu tuần đó
+          targetDate = getDateFromISOWeek(year, week)
+        } else {
+          targetDate = new Date(date)
+        }
+
+        // Tìm ngày Thứ 2 của tuần
+        const dayOfWeek = targetDate.getDay()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // Chủ nhật = 0, cần lùi 6 ngày
+
+        const start = new Date(targetDate)
+        start.setDate(targetDate.getDate() + diff)
+        start.setHours(0, 0, 0, 0)
+
+        const end = new Date(start)
+        end.setDate(start.getDate() + 6)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'month': {
+        // Lấy sự kiện trong 1 tháng
+        let targetYear, targetMonth
+
+        if (year !== null && month !== null) {
+          targetYear = year
+          targetMonth = month - 1 // JavaScript month: 0-11
+        } else {
+          const targetDate = new Date(date)
+          targetYear = targetDate.getFullYear()
+          targetMonth = targetDate.getMonth()
+        }
+
+        const start = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0)
+        const end = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'threeMonths': {
+        // Lấy sự kiện trong 3 tháng (tháng trước, tháng này, tháng sau)
+        const now = date
+        const currentMonth = now.getMonth()
+        const currentYear = now.getFullYear()
+
+        // Tháng trước (ngày 1)
+        const start = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0)
+
+        // Tháng sau (ngày cuối)
+        const end = new Date(currentYear, currentMonth + 2, 0, 23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'range': {
+        // Lấy sự kiện trong khoảng thời gian tùy chỉnh
+        if (!startDate || !endDate) {
+          throw new Error('startDate and endDate are required for viewType "range"')
+        }
+
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      default:
+        throw new Error(`Invalid viewType: ${viewType}`)
+    }
+
+    console.log('Date range:', { startISO, endISO, viewType })
 
     const db = GET_DB()
 
-    // 1. Lấy bookings của user trong 3 tháng
-    const bookingEvents = await db
-      .collection('bookings')
-      .aggregate([
+    // ========== XÂY DỰNG MATCH CONDITION CHO BOOKINGS ==========
+    const bookingMatchConditions = {
+      userId: new ObjectId(String(userId)),
+      _destroy: false,
+    }
+
+    // Thêm filter locationIds cho bookings
+    if (locationIds.length > 0) {
+      bookingMatchConditions.locationId = {
+        $in: locationIds.map((id) => new ObjectId(String(id))),
+      }
+    }
+
+    // ========== XÂY DỰNG MATCH CONDITION CHO CLASS SESSIONS ==========
+    const classSessionMatchConditions = {
+      users: new ObjectId(String(userId)),
+      _destroy: false,
+    }
+
+    // Thêm filter roomIds cho class sessions
+    if (roomIds.length > 0) {
+      classSessionMatchConditions.roomId = {
+        $in: roomIds.map((id) => new ObjectId(String(id))),
+      }
+    }
+
+    // ========== 1. LẤY BOOKINGS ==========
+    let bookingEvents = []
+
+    // Chỉ query bookings nếu không filter hoặc có 'booking' trong eventTypes
+    if (eventTypes.length === 0 || eventTypes.includes('booking')) {
+      const bookingPipeline = [
         // Match bookings của user chưa bị xóa
         {
-          $match: {
-            userId: new ObjectId(String(userId)),
-            _destroy: false,
-          },
+          $match: bookingMatchConditions,
         },
         // Join với schedules để lấy thời gian
         {
@@ -681,7 +849,7 @@ const getUserEventsForThreeMonths = async (userId) => {
         {
           $unwind: '$schedule',
         },
-        // Filter theo thời gian 3 tháng
+        // Filter theo thời gian
         {
           $match: {
             'schedule._destroy': false,
@@ -729,34 +897,67 @@ const getUserEventsForThreeMonths = async (userId) => {
         {
           $unwind: '$location',
         },
-        // Project theo format yêu cầu cho booking
-        {
-          $project: {
-            _id: 1,
-            title: 1,
-            startTime: '$schedule.startTime',
-            endTime: '$schedule.endTime',
-            locationName: '$location.name',
-            trainerName: '$trainerUser.fullName',
-            eventType: { $literal: 'booking' }, // Đánh dấu là booking
-          },
-        },
-        // Sort theo thời gian
-        {
-          $sort: { startTime: 1 },
-        },
-      ])
-      .toArray()
+      ]
 
-    // 2. Lấy classSession của user trong 3 tháng
-    const classSessionEvents = await db
-      .collection('class_sessions')
-      .aggregate([
-        // Match class sessions có user này và trong khoảng thời gian
+      // Thêm filter theo locationNames nếu có
+      if (locationNames.length > 0) {
+        bookingPipeline.push({
+          $match: {
+            'location.name': { $in: locationNames },
+          },
+        })
+      }
+
+      // Thêm filter theo trainerIds nếu có
+      if (trainerIds.length > 0) {
+        bookingPipeline.push({
+          $match: {
+            'trainer._id': { $in: trainerIds.map((id) => new ObjectId(String(id))) },
+          },
+        })
+      }
+
+      // Thêm filter theo trainerNames nếu có
+      if (trainerNames.length > 0) {
+        bookingPipeline.push({
+          $match: {
+            'trainerUser.fullName': { $in: trainerNames },
+          },
+        })
+      }
+
+      // Project theo format yêu cầu cho booking
+      bookingPipeline.push({
+        $project: {
+          _id: 1,
+          title: 1,
+          startTime: '$schedule.startTime',
+          endTime: '$schedule.endTime',
+          locationName: '$location.name',
+          locationId: '$location._id',
+          trainerName: '$trainerUser.fullName',
+          trainerId: '$trainer._id',
+          eventType: { $literal: 'booking' },
+          status: 1, // Giả sử có trường status
+        },
+      })
+
+      bookingEvents = await db.collection('bookings').aggregate(bookingPipeline).toArray()
+    }
+
+    // ========== 2. LẤY CLASS SESSIONS ==========
+    let classSessionEvents = []
+
+    // Chỉ query class sessions nếu không filter hoặc có 'classSession' trong eventTypes
+    if (eventTypes.length === 0 || eventTypes.includes('classSession')) {
+      const classSessionPipeline = [
+        // Match class sessions có user này
+        {
+          $match: classSessionMatchConditions,
+        },
+        // Filter theo thời gian
         {
           $match: {
-            users: new ObjectId(String(userId)),
-            _destroy: false,
             $expr: {
               $and: [
                 { $gte: [{ $dateFromString: { dateString: '$startTime' } }, new Date(startISO)] },
@@ -807,33 +1008,74 @@ const getUserEventsForThreeMonths = async (userId) => {
             as: 'trainerUsers',
           },
         },
-        // Project theo format yêu cầu cho classSession
-        {
-          $project: {
-            _id: 1,
-            title: 1,
-            startTime: 1,
-            endTime: 1,
-            locationName: '$location.name',
-            roomName: '$room.name',
-            trainerName: {
-              $map: {
-                input: '$trainerUsers',
-                as: 'trainer',
-                in: '$$trainer.fullName',
-              },
-            },
-            eventType: { $literal: 'classSession' }, // Đánh dấu là classSession
-          },
-        },
-        // Sort theo thời gian
-        {
-          $sort: { startTime: 1 },
-        },
-      ])
-      .toArray()
+      ]
 
-    // 3. Kết hợp và format lại dữ liệu
+      // Thêm filter theo locationNames nếu có
+      if (locationNames.length > 0) {
+        classSessionPipeline.push({
+          $match: {
+            'location.name': { $in: locationNames },
+          },
+        })
+      }
+
+      // Thêm filter theo roomNames nếu có
+      if (roomNames.length > 0) {
+        classSessionPipeline.push({
+          $match: {
+            'room.name': { $in: roomNames },
+          },
+        })
+      }
+
+      // Thêm filter theo trainerIds nếu có (ít nhất 1 trainer trong array trùng)
+      if (trainerIds.length > 0) {
+        classSessionPipeline.push({
+          $match: {
+            'trainerDetails._id': {
+              $in: trainerIds.map((id) => new ObjectId(String(id))),
+            },
+          },
+        })
+      }
+
+      // Thêm filter theo trainerNames nếu có
+      if (trainerNames.length > 0) {
+        classSessionPipeline.push({
+          $match: {
+            'trainerUsers.fullName': { $in: trainerNames },
+          },
+        })
+      }
+
+      // Project theo format yêu cầu cho classSession
+      classSessionPipeline.push({
+        $project: {
+          _id: 1,
+          title: 1,
+          startTime: 1,
+          endTime: 1,
+          locationName: '$location.name',
+          locationId: '$location._id',
+          roomName: '$room.name',
+          roomId: '$room._id',
+          trainerName: {
+            $map: {
+              input: '$trainerUsers',
+              as: 'trainer',
+              in: '$$trainer.fullName',
+            },
+          },
+          trainerIds: '$trainerDetails._id',
+          eventType: { $literal: 'classSession' },
+          status: 1, // Giả sử có trường status
+        },
+      })
+
+      classSessionEvents = await db.collection('class_sessions').aggregate(classSessionPipeline).toArray()
+    }
+
+    // ========== 3. KẾT HỢP VÀ FORMAT DỮ LIỆU ==========
     const allEvents = []
 
     // Thêm booking events
@@ -844,8 +1086,11 @@ const getUserEventsForThreeMonths = async (userId) => {
         startTime: event.startTime,
         endTime: event.endTime,
         locationName: event.locationName,
+        locationId: event.locationId,
         trainerName: event.trainerName, // string
+        trainerId: event.trainerId,
         eventType: 'booking',
+        status: event.status,
       })
     })
 
@@ -857,20 +1102,67 @@ const getUserEventsForThreeMonths = async (userId) => {
         startTime: event.startTime,
         endTime: event.endTime,
         locationName: event.locationName,
+        locationId: event.locationId,
         roomName: event.roomName,
+        roomId: event.roomId,
         trainerName: event.trainerName, // array
+        trainerIds: event.trainerIds,
         eventType: 'classSession',
+        status: event.status,
       })
     })
 
-    // 4. Sort tất cả events theo thời gian
-    allEvents.sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    // ========== 4. LOẠI TRỪ SỰ KIỆN QUÁ KHỨ (NẾU CẦN) ==========
+    let filteredEvents = allEvents
 
-    return allEvents
+    if (!includePastEvents) {
+      const now = new Date()
+      filteredEvents = allEvents.filter((event) => {
+        const eventDate = new Date(event.startTime)
+        return eventDate >= now
+      })
+    }
+
+    // ========== 5. SẮP XẾP ==========
+    filteredEvents.sort((a, b) => {
+      const aValue = a[sortBy]
+      const bValue = b[sortBy]
+
+      let comparison = 0
+      if (sortBy === 'startTime' || sortBy === 'endTime') {
+        comparison = new Date(aValue) - new Date(bValue)
+      } else {
+        comparison = aValue > bValue ? 1 : aValue < bValue ? -1 : 0
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+
+    // ========== 6. PHÂN TRANG (NẾU CẦN) ==========
+    if (page !== null && limit !== null) {
+      const startIndex = (page - 1) * limit
+      const endIndex = startIndex + limit
+      const paginatedEvents = filteredEvents.slice(startIndex, endIndex)
+
+      return {
+        events: paginatedEvents,
+        pagination: {
+          page,
+          limit,
+          total: filteredEvents.length,
+          totalPages: Math.ceil(filteredEvents.length / limit),
+          hasMore: endIndex < filteredEvents.length,
+        },
+      }
+    }
+
+    // ========== 7. TRẢ VỀ KẾT QUẢ ==========
+    return filteredEvents
   } catch (error) {
-    throw new Error(`Error getting user events for three months: ${error.message}`)
+    throw new Error(`Error getting user events: ${error.message}`)
   }
 }
+
 const getUserEventsForSevenDays = async (userId) => {
   try {
     // Tính toán khoảng thời gian 7 ngày tới

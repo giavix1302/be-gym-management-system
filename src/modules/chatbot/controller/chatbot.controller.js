@@ -9,14 +9,12 @@ import { StatusCodes } from 'http-status-codes'
 // Health check endpoint
 const getChatbotHealth = async (req, res) => {
   try {
-    // Simple health check
-    await chatbotService.initializeAI()
-
     res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Chatbot service is healthy',
+      message: 'AI Chatbot service is healthy',
       timestamp: new Date().toISOString(),
       aiStatus: 'connected',
+      version: '2.0 - OpenAI Function Calling',
     })
   } catch (error) {
     console.error('Chatbot health check error:', error)
@@ -179,60 +177,32 @@ const getAnonymousConversationHistory = async (req, res) => {
   }
 }
 
-// Quick replies - ✅ UPDATED: Get userId from params
+// ========================================
+// DEPRECATED: Quick Replies (No longer needed with AI)
+// ========================================
+// AI now handles all queries naturally without predefined quick replies
+// These endpoints are kept for backward compatibility but can be removed
+
+/**
+ * @deprecated AI handles all queries naturally now
+ */
 const getQuickReplies = async (req, res) => {
   try {
-    // ✅ FIXED: Get userId from params for authenticated users
     const { userId } = req.params
     const isAuthenticated = !!userId
 
-    console.log('🛠 getQuickReplies ~ userId:', userId, 'isAuthenticated:', isAuthenticated)
-
+    // Return minimal quick replies for backward compatibility
     const quickReplies = [
-      {
-        text: 'Xin chào',
-        value: 'chao',
-        category: 'greeting',
-      },
-      {
-        text: 'Giờ mở cửa gym',
-        value: 'gio_mo_cua',
-        category: 'basic_info',
-      },
-      {
-        text: 'Các cơ sở gym',
-        value: 'co_so_gym',
-        category: 'locations',
-      },
-      {
-        text: 'Gói membership',
-        value: 'goi_membership',
-        category: 'memberships',
-      },
-      {
-        text: 'Lớp học',
-        value: 'lop_hoc',
-        category: 'classes',
-      },
-      {
-        text: 'Trainer',
-        value: 'trainer',
-        category: 'trainers',
-      },
+      { text: 'Xin chào', value: 'Xin chào', category: 'greeting' },
+      { text: 'Giờ mở cửa gym', value: 'Gym mở cửa mấy giờ?', category: 'basic_info' },
+      { text: 'Gói membership', value: 'Có những gói membership nào?', category: 'memberships' },
+      { text: 'Lớp học', value: 'Có những lớp học nào?', category: 'classes' },
     ]
 
     if (isAuthenticated) {
       quickReplies.push(
-        {
-          text: 'Gói tập của tôi',
-          value: 'goi_tap_cua_toi',
-          category: 'personal',
-        },
-        {
-          text: 'Lịch tập của tôi',
-          value: 'lich_tap_cua_toi',
-          category: 'personal',
-        }
+        { text: 'Gói tập của tôi', value: 'Gói tập của tôi', category: 'personal' },
+        { text: 'Lịch tập của tôi', value: 'Lịch của tôi', category: 'personal' }
       )
     }
 
@@ -240,6 +210,8 @@ const getQuickReplies = async (req, res) => {
       success: true,
       quickReplies,
       isAuthenticated,
+      deprecated: true,
+      message: 'AI now handles all queries naturally. Quick replies are optional.',
     })
   } catch (error) {
     console.error('Get quick replies error:', error)
@@ -251,13 +223,13 @@ const getQuickReplies = async (req, res) => {
   }
 }
 
-// Process quick reply - ✅ UPDATED: Get userId from params
+/**
+ * @deprecated Just send the message directly to sendMessage endpoint
+ */
 const processQuickReply = async (req, res) => {
   try {
     const { value } = req.body
-    const { userId } = req.params // ✅ FIXED: Get userId from params instead of req.user
-
-    console.log('🛠 processQuickReply ~ userId:', userId, 'value:', value)
+    const { userId } = req.params
 
     if (!value || typeof value !== 'string') {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -266,28 +238,16 @@ const processQuickReply = async (req, res) => {
       })
     }
 
-    // Map quick reply values to messages
-    const quickReplyMap = {
-      chao: 'Xin chào',
-      gio_mo_cua: 'Gym mở cửa mấy giờ?',
-      co_so_gym: 'Gym có mấy cơ sở?',
-      goi_membership: 'Có những gói membership nào?',
-      lop_hoc: 'Có những lớp học nào?',
-      trainer: 'Có những trainer nào?',
-      goi_tap_cua_toi: 'Kiểm tra gói tập của tôi',
-      lich_tap_cua_toi: 'Xem lịch tập của tôi',
-    }
-
-    const message = quickReplyMap[value] || value
-
-    const result = await chatbotService.processMessage(userId, message, null)
+    // Simply process as regular message
+    const result = await chatbotService.processMessage(userId, value, null)
 
     res.status(StatusCodes.OK).json({
       success: result.success,
       response: result.response,
       conversationId: result.conversationId,
-      metadata: result.metadata || {},
       timestamp: new Date().toISOString(),
+      deprecated: true,
+      message: 'Use sendMessage endpoint instead',
     })
   } catch (error) {
     console.error('Process quick reply error:', error)

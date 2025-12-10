@@ -165,6 +165,7 @@ const softDeleteUser = async (req, res, next) => {
 const getUserEventsForThreeMonths = async (req, res, next) => {
   try {
     const userId = req.params.id
+    const options = req.query
 
     // Validate userId format (optional)
     if (!userId || !userId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -174,7 +175,7 @@ const getUserEventsForThreeMonths = async (req, res, next) => {
       })
     }
 
-    const result = await userService.getUserEventsForThreeMonths(userId)
+    const result = await userService.getUserEventsForThreeMonths(userId, options)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)

@@ -31,6 +31,6 @@ export const env = {
   FE_URL: process.env.FE_URL,
   BE_URL: process.env.BE_URL,
 
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-  GEMINI_MODEL_NAME: process.env.GEMINI_MODEL_NAME,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  OPENAI_MODEL_NAME: process.env.OPENAI_MODEL_NAME,
 }

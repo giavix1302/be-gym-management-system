@@ -228,9 +228,9 @@ const softDeleteUser = async (userId) => {
 }
 
 // NEW: Lấy events của user trong 3 tháng
-const getUserEventsForThreeMonths = async (userId) => {
+const getUserEventsForThreeMonths = async (userId, options = {}) => {
   try {
-    const events = await userModel.getUserEventsForThreeMonths(userId)
+    const events = await userModel.getUserEventsForThreeMonths(userId, options)
 
     return {
       success: true,

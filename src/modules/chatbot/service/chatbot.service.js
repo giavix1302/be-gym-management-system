@@ -1,34 +1,9 @@
-// chatbot.service.js - Optimized version focusing on core functionality
+// chatbot.service.js - AI-Powered Chatbot with OpenAI Function Calling
 
 import { chatbotConversationModel } from '../model/chatbotConversation.model.js'
 import { userModel } from '~/modules/user/model/user.model.js'
-import { subscriptionModel } from '~/modules/subscription/model/subscription.model.js'
-import { sanitize } from '~/utils/utils.js'
-import CHATBOT_CONFIG, { initializeGeminiClient, validateMessage } from '~/config/chatbot.config.js'
-
-// Import core services
-import { classifyIntent } from './intent.classifier.js'
-import { handleFAQ } from './faq.service.js'
-import { handlePersonalInfo } from './personal.service.js'
-
-// Initialize Gemini client once at module level
-let geminiClient = null
-let geminiModel = null
-
-const initializeAI = () => {
-  if (!geminiClient) {
-    try {
-      const { genAI, model } = initializeGeminiClient()
-      geminiClient = genAI
-      geminiModel = model
-      console.log('✅ Gemini AI initialized successfully')
-    } catch (error) {
-      console.error('❌ Failed to initialize Gemini AI:', error)
-      throw error
-    }
-  }
-  return { geminiClient, geminiModel }
-}
+import { validateMessage } from '~/config/chatbot.config.js'
+import { handleFunctionCallingFlow } from './openai.service.js'
 
 // Helper functions
 const generateAnonymousId = () => `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -65,129 +40,39 @@ const getOrCreateConversation = async (userId, anonymousId, isAuthenticated) => 
   }
 }
 
-// Main intent handling
-const handleIntent = async (intentResult, message, userId, conversationId, isAuthenticated) => {
-  const { category, specificIntent, confidence } = intentResult
-
-  console.log('🛠 Intent handling:', { category, specificIntent, confidence })
-
-  // Route based on category
-  if (category === 'FAQ') {
-    return await handleFAQIntent(message, userId)
-  } else if (category === 'PERSONAL') {
-    return await handlePersonalIntent(specificIntent, message, userId, isAuthenticated)
-  } else {
-    return getUnknownIntentResponse()
-  }
-}
-
-// Handle FAQ intents
-const handleFAQIntent = async (message, userId = null) => {
-  try {
-    const faqResult = await handleFAQ(message, userId)
-
-    if (faqResult && faqResult.content) {
-      return {
-        content: faqResult.content,
-        type: faqResult.type || 'faq_response',
-        source: 'faq_service',
-        data: faqResult.data || null,
-      }
-    } else {
-      return getErrorResponse()
-    }
-  } catch (error) {
-    console.error('FAQ Intent handling error:', error)
-    return getErrorResponse()
-  }
-}
-
-// Handle PERSONAL intents (requires authentication)
-const handlePersonalIntent = async (specificIntent, message, userId, isAuthenticated) => {
-  if (!isAuthenticated) {
-    return getLoginRequiredResponse(specificIntent)
-  }
-
-  try {
-    const personalResult = await handlePersonalInfo(specificIntent, userId)
-    return personalResult
-  } catch (error) {
-    console.error('Personal intent handling error:', error)
-    return getErrorResponse()
-  }
-}
-
-// Response helpers
-const getLoginRequiredResponse = (intent) => {
-  const actionLabels = {
-    check_membership: 'kiểm tra gói tập hiện tại',
-    check_schedule: 'xem lịch tập của bạn',
-    my_membership: 'xem thông tin membership',
-    my_schedule: 'xem lịch cá nhân',
-  }
-
-  const actionLabel = actionLabels[intent] || 'thực hiện hành động này'
-
-  return {
-    content: `Để ${actionLabel}, bạn cần đăng nhập.\n\n🔐 ĐĂNG NHẬP ĐỂ:\n• Xem gói tập hiện tại\n• Kiểm tra lịch với PT/lớp học\n• Quản lý thông tin cá nhân\n\n💡 Sau khi đăng nhập, tôi sẽ giúp bạn ${actionLabel}!`,
-    type: 'login_required',
-    actionIntent: intent,
-    requiresAuth: true,
-  }
-}
-
-const getUnknownIntentResponse = () => {
-  return {
-    content:
-      '🤔 Tôi chưa hiểu câu hỏi của bạn.\n\n💪 Bạn có thể hỏi về:\n• Giờ mở cửa gym\n• Cơ sở gym\n• Gói membership\n• Lớp học\n• Trainer\n• Thiết bị\n\nHoặc nói "xin chào" để bắt đầu!',
-    type: 'unknown_intent',
-  }
-}
-
-const getErrorResponse = () => {
-  return {
-    content:
-      'Xin lỗi, đã xảy ra lỗi kỹ thuật.\n\n💪 Bạn có thể:\n• Thử lại với câu hỏi khác\n• Liên hệ hotline: 1900-1234\n• Hỏi về thông tin cơ bản gym\n\nTôi luôn sẵn sàng hỗ trợ bạn!',
-    type: 'error',
-  }
-}
-
 // Save message to conversation
-const saveMessage = async (conversationId, userMessage, botResponse, intentResult) => {
+const saveMessage = async (conversationId, userMessage, botResponse) => {
   try {
-    const messageData = {
+    // Save user message
+    await chatbotConversationModel.addMessageToConversation(conversationId, {
       type: 'user',
       content: userMessage,
       timestamp: new Date(),
-    }
+    })
 
-    const botMessageData = {
+    // Save bot message
+    await chatbotConversationModel.addMessageToConversation(conversationId, {
       type: 'bot',
-      content: botResponse.content,
+      content: botResponse,
       timestamp: new Date(),
-      intent: intentResult.specificIntent,
-      confidence: intentResult.confidence,
-      responseType: botResponse.type,
-    }
-
-    // Save both messages
-    await chatbotConversationModel.addMessageToConversation(conversationId, messageData)
-    await chatbotConversationModel.addMessageToConversation(conversationId, botMessageData)
+    })
   } catch (error) {
     console.error('Failed to save message:', error)
   }
 }
 
-// Main processing function
+// Main processing function with Gemini AI
 const processMessage = async (userId, message, anonymousId) => {
   try {
+    console.log('💬 Processing message:', { userId: userId || 'anonymous', message: message.substring(0, 50) })
+
     // Validate message
     const validation = validateMessage(message)
     if (!validation.valid) {
       return {
         success: false,
         response: {
-          content: validation.error,
+          content: validation.error || 'Tin nhắn không hợp lệ',
           type: 'validation_error',
         },
       }
@@ -196,37 +81,57 @@ const processMessage = async (userId, message, anonymousId) => {
     // Determine user type
     const isAuthenticated = !!userId
 
+    // Get user info if authenticated
+    let userName = null
+    if (userId) {
+      try {
+        const user = await userModel.getDetailById(userId)
+        userName = user?.fullName || 'Quý khách'
+      } catch (error) {
+        console.error('Error getting user info:', error)
+        userName = 'Quý khách'
+      }
+    }
+
     // Get or create conversation
     const conversation = await getOrCreateConversation(userId, anonymousId, isAuthenticated)
 
-    // Classify intent
-    const intentResult = classifyIntent(message)
+    // Call OpenAI with function calling
+    console.log('🤖 Calling OpenAI...')
+    const aiResponse = await handleFunctionCallingFlow(message, conversation, userId, userName)
 
-    // Handle business logic
-    const response = await handleIntent(intentResult, message, userId, conversation._id, isAuthenticated)
+    // Save messages to conversation
+    await saveMessage(conversation._id, message, aiResponse)
 
-    // Save message to conversation
-    await saveMessage(conversation._id, message, response, intentResult)
+    console.log('✅ Message processed successfully')
 
     return {
       success: true,
-      response,
+      response: {
+        content: aiResponse,
+        type: 'ai_response',
+      },
       conversationId: conversation._id,
       anonymousId: isAuthenticated ? null : conversation.anonymousId,
-      metadata: {
-        category: intentResult.category,
-        specificIntent: intentResult.specificIntent,
-        confidence: intentResult.confidence,
-        needsAuth: intentResult.category === 'PERSONAL' && !userId,
-      },
+      timestamp: new Date(),
     }
   } catch (error) {
     console.error('🚨 Chatbot processing error:', error)
+
+    // Friendly error response
+    let errorMessage =
+      'Xin lỗi, hệ thống AI đang gặp sự cố. Vui lòng thử lại sau!\n\n📞 Hotline hỗ trợ: 1900-1234'
+
+    if (error.message?.includes('API key')) {
+      errorMessage = 'Hệ thống AI chưa được cấu hình. Vui lòng liên hệ admin.\n\n📞 Hotline: 1900-1234'
+    } else if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
+      errorMessage = 'Hệ thống đang quá tải. Vui lòng thử lại sau ít phút.\n\n📞 Hotline: 1900-1234'
+    }
+
     return {
       success: false,
       response: {
-        content:
-          'Xin lỗi, đã xảy ra lỗi kỹ thuật. Vui lòng thử lại sau!\n\n📞 Liên hệ: 1900-1234 nếu vấn đề tiếp tục xảy ra.',
+        content: errorMessage,
         type: 'system_error',
       },
       error: error.message,
@@ -297,5 +202,4 @@ export const chatbotService = {
   processMessage,
   getConversationHistory,
   getAnonymousConversationHistory,
-  initializeAI,
 }

@@ -79,13 +79,6 @@ class BookingReminderJob {
               errorCount++
             }
           }
-
-          // ✅ Tổng kết với thống kê chi tiết
-          console.log(`🎯 Booking reminder job completed:`)
-          console.log(`   📈 Processed: ${processedCount} notifications`)
-          console.log(`   ⏭️ Skipped (duplicates): ${skippedCount} notifications`)
-          console.log(`   ❌ Errors: ${errorCount} notifications`)
-          console.log(`   🔍 Total bookings scanned: ${upcomingBookings.length}`)
         } catch (error) {
           console.error('💥 Booking reminder job failed:', error.message)
         }
