@@ -326,7 +326,7 @@ const getTrainerDashboardStatsByUserId = async (userId) => {
   }
 }
 
-const getTrainerEventsForThreeMonths = async (userId) => {
+const getTrainerEventsForThreeMonths = async (userId, options = {}) => {
   try {
     // Kiểm tra xem user có tồn tại không
     const existingUser = await userModel.getDetailById(userId)
@@ -346,8 +346,8 @@ const getTrainerEventsForThreeMonths = async (userId) => {
       }
     }
 
-    // Lấy events của trainer trong 3 tháng
-    const events = await trainerModel.getTrainerEventsForThreeMonths(userId)
+    // Lấy events của trainer với options
+    const events = await trainerModel.getTrainerEventsForThreeMonths(userId, options)
 
     return {
       success: true,

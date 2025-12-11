@@ -68,7 +68,8 @@ export const FUNCTION_DECLARATIONS = [
       properties: {
         muscleCategory: {
           type: 'string',
-          description: 'Filter equipment by muscle group: chest, back, legs, arms, core, shoulders, cardio, etc. Optional.',
+          description:
+            'Filter equipment by muscle group: chest, back, legs, arms, core, shoulders, cardio, etc. Optional.',
         },
         locationId: {
           type: 'string',

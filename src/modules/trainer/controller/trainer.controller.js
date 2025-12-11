@@ -138,8 +138,20 @@ const getTrainerDashboardStatsByUserId = async (req, res, next) => {
 const getTrainerEventsForThreeMonths = async (req, res, next) => {
   try {
     const userId = req.params.id // Lấy userId từ params
+    const { viewType, date, year, month, week, startDate, endDate } = req.query
 
-    const result = await trainerService.getTrainerEventsForThreeMonths(userId)
+    // Xây dựng options object từ query parameters
+    const options = {}
+
+    if (viewType) options.viewType = viewType
+    if (date) options.date = new Date(date)
+    if (year) options.year = parseInt(year, 10)
+    if (month) options.month = parseInt(month, 10)
+    if (week) options.week = parseInt(week, 10)
+    if (startDate) options.startDate = startDate
+    if (endDate) options.endDate = endDate
+
+    const result = await trainerService.getTrainerEventsForThreeMonths(userId, options)
 
     if (result.success) {
       res.status(StatusCodes.OK).json({

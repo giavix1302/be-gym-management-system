@@ -1282,20 +1282,136 @@ const getTrainerDashboardStatsByUserId = async (userId) => {
   }
 }
 
-const getTrainerEventsForThreeMonths = async (userId) => {
+// Helper: convert ISO week number to date (Monday of that week)
+const getDateFromISOWeek = (year, week) => {
+  // ISO weeks start on Monday; set to the first Monday of the year then advance by (week-1)
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7))
+  const dayOfWeek = simple.getUTCDay() || 7 // Sunday returns 0, change to 7
+  if (dayOfWeek !== 1) {
+    // Shift back to Monday
+    simple.setUTCDate(simple.getUTCDate() + 1 - dayOfWeek)
+  }
+  return simple
+}
+
+const getTrainerEventsForThreeMonths = async (userId, options = {}) => {
   try {
-    // Tính toán khoảng thời gian 3 tháng (tháng hiện tại, tháng trước, tháng sau)
-    const now = new Date()
-    const currentMonth = now.getMonth()
-    const currentYear = now.getFullYear()
+    // ========== DESTRUCTURE OPTIONS VỚI GIÁ TRỊ MẶC ĐỊNH ==========
+    const {
+      // FILTER THEO THỜI GIAN
+      viewType = 'threeMonths', // 'day' | 'week' | 'month' | 'threeMonths' | 'range'
+      date = new Date(), // Ngày làm mốc (cho day/week/month)
+      year = null, // Năm cụ thể (ví dụ: 2025)
+      month = null, // Tháng cụ thể (1-12)
+      week = null, // {number|null} Tuần trong năm (1-53, ISO week). VD: 43, 1, 52
+      startDate = null, // {Date|string|null} Ngày bắt đầu (cho range). VD: new Date('2025-12-01'), '2025-12-01', new Date()
+      endDate = null, // {Date|string|null} Ngày kết thúc (cho range). VD: new Date('2025-12-31'), '2025-12-31', new Date()
+    } = options
 
-    // Tháng trước (tháng hiện tại - 1)
-    const startDate = new Date(currentYear, currentMonth - 1, 1)
-    // Tháng sau (cuối tháng hiện tại + 1)
-    const endDate = new Date(currentYear, currentMonth + 2, 0, 23, 59, 59, 999)
+    // ========== TÍNH TOÁN KHOẢNG THỜI GIAN ==========
+    let startISO, endISO
 
-    const startISO = startDate.toISOString()
-    const endISO = endDate.toISOString()
+    switch (viewType) {
+      case 'day': {
+        // Lấy sự kiện trong 1 ngày
+        const targetDate = date
+        const start = new Date(targetDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(targetDate)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'week': {
+        // Lấy sự kiện trong 1 tuần (ISO week: Thứ 2 - Chủ nhật)
+        let targetDate
+
+        if (year && week) {
+          // Nếu có year và week, tính toán ngày đầu tuần đó
+          targetDate = getDateFromISOWeek(year, week)
+        } else {
+          targetDate = new Date(date)
+        }
+
+        // Tìm ngày Thứ 2 của tuần
+        const dayOfWeek = targetDate.getDay()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // Chủ nhật = 0, cần lùi 6 ngày
+
+        const start = new Date(targetDate)
+        start.setDate(targetDate.getDate() + diff)
+        start.setHours(0, 0, 0, 0)
+
+        const end = new Date(start)
+        end.setDate(start.getDate() + 6)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'month': {
+        // Lấy sự kiện trong 1 tháng
+        let targetYear, targetMonth
+
+        if (year !== null && month !== null) {
+          targetYear = year
+          targetMonth = month - 1 // JavaScript month: 0-11
+        } else {
+          const targetDate = new Date(date)
+          targetYear = targetDate.getFullYear()
+          targetMonth = targetDate.getMonth()
+        }
+
+        const start = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0)
+        const end = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'threeMonths': {
+        // Lấy sự kiện trong 3 tháng (tháng trước, tháng này, tháng sau)
+        const now = date
+        const currentMonth = now.getMonth()
+        const currentYear = now.getFullYear()
+
+        // Tháng trước (ngày 1)
+        const start = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0)
+
+        // Tháng sau (ngày cuối)
+        const end = new Date(currentYear, currentMonth + 2, 0, 23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      case 'range': {
+        // Lấy sự kiện trong khoảng thời gian tùy chỉnh
+        if (!startDate || !endDate) {
+          throw new Error('startDate and endDate are required for viewType "range"')
+        }
+
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+
+        startISO = start.toISOString()
+        endISO = end.toISOString()
+        break
+      }
+
+      default:
+        throw new Error(`Invalid viewType: ${viewType}`)
+    }
+
+    console.log('Date range:', { startISO, endISO, viewType })
 
     const db = GET_DB()
 
@@ -1381,6 +1497,7 @@ const getTrainerEventsForThreeMonths = async (userId) => {
             userName: '$bookingUser.fullName', // Tên khách hàng
             note: 1, // Note của booking
             price: 1, // THÊM: Giá của booking
+            status: 1, // THÊM: Trạng thái booking
             eventType: { $literal: 'booking' },
           },
         },
@@ -1540,6 +1657,7 @@ const getTrainerEventsForThreeMonths = async (userId) => {
         userName: event.userName, // Tên khách hàng đã đặt booking
         note: event.note,
         price: event.price, // THÊM: Giá booking
+        status: event.status, // THÊM: Trạng thái booking
       })
     })
 
