@@ -1,3 +1,4 @@
+/* eslint-disable indent */
 import { ObjectId, ReturnDocument } from 'mongodb'
 import Joi from 'joi'
 import { GET_DB } from '~/config/mongodb.config.js'
@@ -624,8 +625,10 @@ const getListBookingByTrainerId = async (trainerId, page = 1, limit = 10) => {
   try {
     const db = GET_DB()
     const skip = (page - 1) * limit
+    const now = new Date()
 
-    const pipeline = [
+    // 1. Lấy completed bookings của trainer
+    const bookingsPipeline = [
       // Join với schedules để lấy thông tin schedule của trainer
       {
         $lookup: {
@@ -635,17 +638,20 @@ const getListBookingByTrainerId = async (trainerId, page = 1, limit = 10) => {
           as: 'schedule',
         },
       },
-      // Unwind schedule array
       {
         $unwind: '$schedule',
       },
-      // Match bookings thuộc về trainer cụ thể và có status completed
+      // Match bookings thuộc về trainer cụ thể, có status completed, và đã kết thúc
       {
         $match: {
           'schedule.trainerId': new ObjectId(String(trainerId)),
           'schedule._destroy': false,
-          status: 'completed', // Chỉ lấy booking completed
+          status: 'completed',
           _destroy: false,
+          $expr: {
+            // Chỉ lấy những booking đã kết thúc (endTime < now)
+            $lt: [{ $dateFromString: { dateString: '$schedule.endTime' } }, now],
+          },
         },
       },
       // Join với users để lấy thông tin user đã booking
@@ -657,7 +663,6 @@ const getListBookingByTrainerId = async (trainerId, page = 1, limit = 10) => {
           as: 'user',
         },
       },
-      // Unwind user array
       {
         $unwind: '$user',
       },
@@ -670,7 +675,6 @@ const getListBookingByTrainerId = async (trainerId, page = 1, limit = 10) => {
           as: 'location',
         },
       },
-      // Unwind location array
       {
         $unwind: '$location',
       },
@@ -680,73 +684,110 @@ const getListBookingByTrainerId = async (trainerId, page = 1, limit = 10) => {
           _id: 1,
           title: 1,
           price: 1,
-          userName: '$user.fullName', // userId -> fullName
-          locationName: '$location.name', // locationId -> name
-          createAt: '$createdAt', // Sử dụng createAt như yêu cầu
+          userName: '$user.fullName',
+          locationName: '$location.name',
+          createAt: '$createdAt',
+          eventType: { $literal: 'booking' },
         },
-      },
-      // Sort theo thời gian tạo mới nhất
-      {
-        $sort: { createdAt: -1 },
-      },
-      // Pagination
-      {
-        $skip: skip,
-      },
-      {
-        $limit: limit,
       },
     ]
 
-    // Thực hiện aggregation để lấy data
-    const bookings = await db.collection(bookingModel.BOOKING_COLLECTION_NAME).aggregate(pipeline).toArray()
+    const bookings = await db.collection(bookingModel.BOOKING_COLLECTION_NAME).aggregate(bookingsPipeline).toArray()
 
-    // Đếm tổng số booking completed của trainer để tính pagination
-    const totalBookingsPipeline = [
-      {
-        $lookup: {
-          from: 'schedules',
-          localField: 'scheduleId',
-          foreignField: '_id',
-          as: 'schedule',
-        },
-      },
-      {
-        $unwind: '$schedule',
-      },
+    // 2. Lấy class sessions của trainer đã kết thúc
+    const classSessionsPipeline = [
       {
         $match: {
-          'schedule.trainerId': new ObjectId(String(trainerId)),
-          'schedule._destroy': false,
-          status: 'completed',
+          trainers: new ObjectId(String(trainerId)),
           _destroy: false,
+          $expr: {
+            // Chỉ lấy những class session đã kết thúc
+            $lt: [{ $dateFromString: { dateString: '$endTime' } }, now],
+          },
+        },
+      },
+      // Join với classes để lấy ratePerClassSession
+      {
+        $lookup: {
+          from: 'classes',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'class',
         },
       },
       {
-        $count: 'total',
+        $unwind: '$class',
+      },
+      // Join với rooms để lấy thông tin room
+      {
+        $lookup: {
+          from: 'rooms',
+          localField: 'roomId',
+          foreignField: '_id',
+          as: 'room',
+        },
+      },
+      {
+        $unwind: '$room',
+      },
+      // Join với locations để lấy tên location
+      {
+        $lookup: {
+          from: 'locations',
+          localField: 'room.locationId',
+          foreignField: '_id',
+          as: 'location',
+        },
+      },
+      {
+        $unwind: '$location',
+      },
+      // Project theo cấu trúc yêu cầu
+      {
+        $project: {
+          _id: 1,
+          title: '$class.name',
+          price: '$class.ratePerClassSession',
+          roomName: '$room.name',
+          locationName: '$location.name',
+          createAt: '$createdAt',
+          eventType: { $literal: 'classSession' },
+        },
       },
     ]
 
-    const totalResult = await db
-      .collection(bookingModel.BOOKING_COLLECTION_NAME)
-      .aggregate(totalBookingsPipeline)
-      .toArray()
-    const totalBookings = totalResult[0]?.total || 0
-    const totalPages = Math.ceil(totalBookings / limit)
+    const classSessions = await db.collection('class_sessions').aggregate(classSessionsPipeline).toArray()
+
+    // 3. Kết hợp booking và classSession
+    const allEvents = [...bookings, ...classSessions]
+
+    // 4. Sort theo thời gian tạo mới nhất
+    allEvents.sort((a, b) => b.createAt - a.createAt)
+
+    // 5. Tính tổng số sự kiện
+    const totalEvents = allEvents.length
+
+    // 6. Apply pagination trên kết quả kết hợp
+    const paginatedEvents = allEvents.slice(skip, skip + limit)
+
+    // Loại bỏ eventType trước khi trả về (nó chỉ dùng để phân biệt loại sự kiện)
+    const finalData = paginatedEvents.map(({ eventType, ...rest }) => rest)
+
+    const totalPages = Math.ceil(totalEvents / limit)
 
     return {
-      data: bookings,
+      data: finalData,
       pagination: {
         currentPage: page,
         totalPages,
-        totalPayments: totalBookings, // Sử dụng totalPayments như yêu cầu
+        totalPayments: totalEvents,
         limit,
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
     }
   } catch (error) {
-    throw new Error(`Error getting trainer bookings: ${error.message}`)
+    throw new Error(`Error getting trainer bookings and class sessions: ${error.message}`)
   }
 }
 
