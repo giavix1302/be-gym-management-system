@@ -97,6 +97,14 @@ const cancelClassEnrollment = async (enrollmentId) => {
         paymentStatus: PAYMENT_STATUS.REFUNDED,
       })
     }
+    const classEnrollment = await classEnrollmentModel.getDetailById(enrollmentId)
+
+    // Remove user from associated class sessions
+    const resultRemoveUser = await classEnrollmentModel.removeUserFromClassSessions(
+      classEnrollment.userId,
+      classEnrollment.classId
+    )
+    console.log('🚀 ~ cancelClassEnrollment ~ resultRemoveUser:', resultRemoveUser)
 
     const result = await classEnrollmentModel.cancelEnrollment(enrollmentId)
 

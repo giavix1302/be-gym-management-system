@@ -341,6 +341,39 @@ const canCancelEnrollment = async (classEnrollmentId) => {
   }
 }
 
+const removeUserFromClassSessions = async (userId, classId) => {
+  try {
+    // Convert IDs to ObjectId
+    const userObjectId = new ObjectId(String(userId))
+    const classObjectId = new ObjectId(String(classId))
+
+    // Get current time in ISO format
+    const currentTime = new Date().toISOString()
+
+    // Remove user from all upcoming class sessions (where startTime >= current time)
+    const result = await GET_DB()
+      .collection(classSessionModel.CLASS_SESSION_COLLECTION_NAME)
+      .updateMany(
+        {
+          classId: classObjectId,
+          startTime: { $gte: currentTime },
+          _destroy: false,
+        },
+        {
+          $pull: { users: userObjectId },
+          $set: { updatedAt: Date.now() },
+        }
+      )
+
+    return {
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const classEnrollmentModel = {
   CLASS_ENROLLMENT_COLLECTION_NAME,
   CLASS_ENROLLMENT_COLLECTION_SCHEMA,
@@ -352,4 +385,5 @@ export const classEnrollmentModel = {
   updateInfo,
   cancelEnrollment,
   canCancelEnrollment,
+  removeUserFromClassSessions,
 }
