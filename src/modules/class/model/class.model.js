@@ -750,7 +750,9 @@ const getListClassInfoForTrainer = async (trainerId) => {
                 input: {
                   $filter: {
                     input: '$enrollments',
-                    cond: { $eq: ['$$this._destroy', false] },
+                    cond: {
+                      $and: [{ $eq: ['$$this._destroy', false] }, { $eq: ['$$this.status', 'active'] }],
+                    },
                   },
                 },
                 as: 'enrollment',
@@ -1982,7 +1984,12 @@ const getListClassByLocationId = async (locationId) => {
           $addFields: {
             classEnrollments: {
               $map: {
-                input: '$enrollments',
+                input: {
+                  $filter: {
+                    input: '$enrollments',
+                    cond: { $eq: ['$$this.status', 'active'] },
+                  },
+                },
                 as: 'enrollment',
                 in: {
                   $let: {
