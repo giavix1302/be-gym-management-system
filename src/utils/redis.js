@@ -48,12 +48,12 @@ export const getUserTemp = async (phone) => {
 export const saveLinkPaymentTemp = async (subId, data) => {
   // Lưu payment link chính
   await redisCloud.set(`user:${subId}`, JSON.stringify(data), {
-    EX: 5 * 60,
+    EX: 10 * 60,
   })
 
   // Lưu backup data để lấy khi expired
   await redisCloud.set(`backup:${subId}`, JSON.stringify(data), {
-    EX: 6 * 60, // Thêm 1 phút để đảm bảo backup còn khi cần
+    EX: 11 * 60, // Thêm 1 phút để đảm bảo backup còn khi cần
   })
 }
 

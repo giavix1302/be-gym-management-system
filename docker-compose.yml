@@ -1,0 +1,65 @@
+services:
+  # Backend API Application (Using Cloud MongoDB & Redis)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gms-api
+    restart: unless-stopped
+    environment:
+      # Node environment
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # Server
+      PORT: 3000
+      
+      # Database (Cloud MongoDB)
+      MONGODB_URL: ${MONGODB_URL}
+      DATABASE_NAME: ${DATABASE_NAME:-gms_db}
+      
+      # Redis (Cloud Redis)
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      
+      # Cloudinary
+      CLOUDINARY_NAME: ${CLOUDINARY_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      
+      # Twilio
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID}
+      TWILIO_FROM: ${TWILIO_FROM}
+      TWILIO_OTP_TTL_SECONDS: ${TWILIO_OTP_TTL_SECONDS:-300}
+      TWILIO_OTP_RESEND_COOLDOWN: ${TWILIO_OTP_RESEND_COOLDOWN:-60}
+      TWILIO_OTP_MAX_ATTEMPTS: ${TWILIO_OTP_MAX_ATTEMPTS:-5}
+      
+      # VNPay
+      VNPAY_VNP_TMNCODE: ${VNPAY_VNP_TMNCODE}
+      VNPAY_VNP_HASHSECRET: ${VNPAY_VNP_HASHSECRET}
+      
+      # URLs
+      FE_URL: ${FE_URL:-http://localhost:3001}
+      BE_URL: ${BE_URL:-http://localhost:3000}
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-gpt-4o-mini}
+    
+    ports:
+      - "${API_PORT:-3000}:3000"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/v1/socket/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

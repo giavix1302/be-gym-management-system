@@ -42,7 +42,7 @@ const createPaymentVnpay = async (body) => {
     // create payment url: subId, price, name
     const paymentUrl = createPaymentURL(id, calculateDiscountedPrice(price, discount).finalPrice, name)
 
-    const expireAt = new Date(Date.now() + 30 * 60 * 1000)
+    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
       membershipId,
       userId,
@@ -101,7 +101,7 @@ const createPaymentBookingPtVnpay = async (data) => {
     console.log('🚀 ~ createPaymentBookingPtVnpay ~ idBookingArr:', idBookingArr)
 
     // SỬA: Dùng saveLinkPaymentTemp() như cũ (đã có backup mechanism)
-    const expireAt = new Date(Date.now() + 5 * 60 * 1000)
+    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
       idBookingArr,
       paymentUrl,
@@ -148,7 +148,7 @@ const createPaymentClassVnpay = async (data) => {
     const paymentUrl = createPaymentURL(id, price, title)
 
     // tạo 1 mảng lưu id trong redis
-    const expireAt = new Date(Date.now() + 30 * 60 * 1000)
+    const expireAt = new Date(Date.now() + 10 * 60 * 1000)
     await saveLinkPaymentTemp(id, {
       userId,
       classId,
