@@ -199,6 +199,7 @@ const vnpReturn = async (query) => {
       // create subscription
       const membershipInfo = await membershipModel.getDetailById(membershipId)
       const { durationMonth } = membershipInfo
+      console.log('🚀 ~ vnpReturn ~ durationMonth:', durationMonth)
 
       const userInfo = await userModel.getDetailById(userId)
 
@@ -211,6 +212,7 @@ const vnpReturn = async (query) => {
         paymentStatus: PAYMENT_STATUS.PAID,
         remainingSessions: countRemainingDays(calculateEndDate(convertVnpayDateToISO(vnp_PayDate), durationMonth)),
       }
+      console.log('🚀 ~ vnpReturn ~ dataToCreateSubscription:', dataToCreateSubscription)
 
       const subInfo = await subscriptionModel.createNew(dataToCreateSubscription)
 

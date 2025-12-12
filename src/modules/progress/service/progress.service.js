@@ -1,19 +1,22 @@
+/* eslint-disable indent */
 import { sanitize } from '~/utils/utils'
 import { progressModel } from '../model/progress.model'
 
 const createNew = async (data) => {
+  console.log('🚀 ~ createNew ~ data:', data)
   try {
     const newProgress = {
       userId: data.userId,
       measurementDate: data.measurementDate || new Date().toISOString(),
-      weight: data.weight,
-      bodyFat: data.bodyFat,
-      muscleMass: data.muscleMass,
+      weight: Number(data.weight),
+      bodyFat: Number(data.bodyFat),
+      muscleMass: Number(data.muscleMass),
       note: data.note || '',
     }
 
     const createdProgress = await progressModel.createNew(newProgress)
-    const getNewProgress = await progressModel.getDetailById(createdProgress.insertedId)
+    console.log('🚀 ~ createNew ~ createdProgress:', createdProgress)
+    const getNewProgress = await progressModel.getDetailById(createdProgress.insertedId.toString())
 
     return {
       success: true,
@@ -142,6 +145,7 @@ const getLatestByUserId = async (userId) => {
 const getTrendData = async (userId, timeRange = 30) => {
   try {
     const trendData = await progressModel.getTrendData(userId, timeRange)
+    console.log('🚀 ~ getTrendData ~ trendData:', trendData)
 
     return {
       success: true,

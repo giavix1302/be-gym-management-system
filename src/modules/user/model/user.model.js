@@ -630,7 +630,6 @@ const getTotalActiveUsers = async () => {
     const totalActiveUsers = await GET_DB().collection(USER_COLLECTION_NAME).countDocuments({
       _destroy: false,
       role: USER_TYPES.USER, // Chỉ đếm user, không đếm admin/pt/staff
-      status: STATUS_TYPE.ACTIVE,
     })
 
     return totalActiveUsers
@@ -796,8 +795,6 @@ const getUserEventsForThreeMonths = async (userId, options = {}) => {
       default:
         throw new Error(`Invalid viewType: ${viewType}`)
     }
-
-    console.log('Date range:', { startISO, endISO, viewType })
 
     const db = GET_DB()
 

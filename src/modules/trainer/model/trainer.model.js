@@ -1452,8 +1452,6 @@ const getTrainerEventsForThreeMonths = async (userId, options = {}) => {
         throw new Error(`Invalid viewType: ${viewType}`)
     }
 
-    console.log('Date range:', { startISO, endISO, viewType })
-
     const db = GET_DB()
 
     // Tìm trainerId từ userId

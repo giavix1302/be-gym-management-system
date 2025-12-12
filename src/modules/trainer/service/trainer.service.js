@@ -272,7 +272,7 @@ const getListBookingByTrainerId = async (userId, query) => {
     if (!trainer) {
       return {
         success: false,
-        message: 'Trainer not found',
+        message: 'Chưa có thông tin trainer cho user này',
       }
     }
 
@@ -308,7 +308,7 @@ const getTrainerDashboardStatsByUserId = async (userId) => {
     if (!trainer) {
       return {
         success: false,
-        message: 'Trainer not found',
+        message: 'Không tìm thấy dữ liệu trainer',
       }
     }
 
@@ -342,7 +342,7 @@ const getTrainerEventsForThreeMonths = async (userId, options = {}) => {
     if (!trainer) {
       return {
         success: false,
-        message: 'Trainer not found',
+        message: 'Không tìm thấy thông tin trainer cho user này',
       }
     }
 

@@ -10,7 +10,7 @@ const PROGRESS_COLLECTION_SCHEMA = Joi.object({
   weight: Joi.number().min(1).precision(2).required(),
   bodyFat: Joi.number().min(1).precision(2).required(),
   muscleMass: Joi.number().min(1).precision(2).required(),
-  note: Joi.string().trim().strict(),
+  note: Joi.string().trim().strict().allow(''),
 
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
@@ -23,18 +23,15 @@ const validateBeforeCreate = async (data) => {
   })
 }
 
-const validateBeforeUpdate = async (data) => {
-  const updateSchema = PROGRESS_COLLECTION_SCHEMA.fork(['userId'], (schema) => schema.optional())
-  return await updateSchema.validateAsync(data, {
-    abortEarly: false,
-  })
-}
-
 // Tạo mới progress record
 const createNew = async (data) => {
   try {
-    const validData = await validateBeforeCreate(data)
-    const createdProgress = await GET_DB().collection(PROGRESS_COLLECTION_NAME).insertOne(validData)
+    const validData = await validateBeforeCreate(data, { abortEarly: false })
+    const newDataToAdd = {
+      ...validData,
+      userId: new ObjectId(String(validData.userId)),
+    }
+    const createdProgress = await GET_DB().collection(PROGRESS_COLLECTION_NAME).insertOne(newDataToAdd)
     return createdProgress
   } catch (error) {
     throw new Error(error)
@@ -64,7 +61,7 @@ const getAllByUserId = async (userId, options = {}) => {
     let query = GET_DB()
       .collection(PROGRESS_COLLECTION_NAME)
       .find({
-        userId: String(userId),
+        userId: new ObjectId(String(userId)),
         _destroy: false,
       })
       .sort({ [sortBy]: sortOrder })
@@ -82,12 +79,11 @@ const getAllByUserId = async (userId, options = {}) => {
 // Cập nhật progress record
 const updateInfo = async (progressId, updateData) => {
   try {
-    const validData = await validateBeforeUpdate(updateData)
     const result = await GET_DB()
       .collection(PROGRESS_COLLECTION_NAME)
       .findOneAndUpdate(
         { _id: new ObjectId(String(progressId)) },
-        { $set: { ...validData, updatedAt: Date.now() } },
+        { $set: { ...updateData, updatedAt: Date.now() } },
         { returnDocument: ReturnDocument.AFTER }
       )
     return result
@@ -119,7 +115,7 @@ const getLatestByUserId = async (userId) => {
       .collection(PROGRESS_COLLECTION_NAME)
       .findOne(
         {
-          userId: String(userId),
+          userId: new ObjectId(String(userId)),
           _destroy: false,
         },
         {
@@ -132,25 +128,20 @@ const getLatestByUserId = async (userId) => {
   }
 }
 
-// Thống kê xu hướng thay đổi theo thời gian
-const getTrendData = async (userId, timeRange = 30) => {
+// Thống kê xu hướng thay đổi theo thời gian - Lấy tất cả dữ liệu của user
+const getTrendData = async (userId) => {
   try {
-    const fromDate = new Date()
-    fromDate.setDate(fromDate.getDate() - timeRange)
-
-    // Thử lấy dữ liệu trong khoảng thời gian trước
-    let trendData = await GET_DB()
+    const trendData = await GET_DB()
       .collection(PROGRESS_COLLECTION_NAME)
       .aggregate([
         {
           $match: {
-            userId: String(userId),
+            userId: new ObjectId(String(userId)),
             _destroy: false,
-            measurementDate: { $gte: fromDate.toISOString() },
           },
         },
         {
-          $sort: { measurementDate: 1 },
+          $sort: { measurementDate: 1, createdAt: 1 },
         },
         {
           $project: {
@@ -164,36 +155,6 @@ const getTrendData = async (userId, timeRange = 30) => {
       ])
       .toArray()
 
-    // Nếu không có dữ liệu trong khoảng thời gian, lấy tất cả dữ liệu (tối đa 20 records gần nhất)
-    if (trendData.length === 0) {
-      trendData = await GET_DB()
-        .collection(PROGRESS_COLLECTION_NAME)
-        .aggregate([
-          {
-            $match: {
-              userId: String(userId),
-              _destroy: false,
-            },
-          },
-          {
-            $sort: { measurementDate: 1, createdAt: 1 },
-          },
-          {
-            $limit: 20,
-          },
-          {
-            $project: {
-              measurementDate: 1,
-              weight: 1,
-              bodyFat: 1,
-              muscleMass: 1,
-              createdAt: 1,
-            },
-          },
-        ])
-        .toArray()
-    }
-
     return trendData
   } catch (error) {
     throw new Error(error)
@@ -206,7 +167,7 @@ const getComparisonData = async (userId) => {
     const lastTwoRecords = await GET_DB()
       .collection(PROGRESS_COLLECTION_NAME)
       .find({
-        userId: String(userId),
+        userId: new ObjectId(String(userId)),
         _destroy: false,
       })
       .sort({ measurementDate: -1, createdAt: -1 })
@@ -250,7 +211,7 @@ const getStatistics = async (userId) => {
       .aggregate([
         {
           $match: {
-            userId: String(userId),
+            userId: new ObjectId(String(userId)),
             _destroy: false,
           },
         },

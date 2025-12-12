@@ -42,7 +42,7 @@ export function calculateEndDate(startDateISO, monthsToAdd) {
   const startDate = new Date(startDateISO)
 
   const endDate = new Date(startDate)
-  endDate.setMonth(endDate.getMonth() + monthsToAdd)
+  endDate.setMonth(endDate.getMonth() + Number(monthsToAdd))
 
   return endDate.toISOString()
 }

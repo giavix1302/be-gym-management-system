@@ -236,11 +236,7 @@ const updateInfo = async (scheduleId, updateData) => {
   try {
     const updatedSchedule = await GET_DB()
       .collection(SCHEDULE_COLLECTION_NAME)
-      .findOneAndUpdate(
-        { _id: new ObjectId(String(scheduleId)) },
-        { $set: updateData },
-        { returnDocument: 'after' }
-      )
+      .findOneAndUpdate({ _id: new ObjectId(String(scheduleId)) }, { $set: updateData }, { returnDocument: 'after' })
     return updatedSchedule
   } catch (error) {
     throw new Error(error)
