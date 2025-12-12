@@ -202,10 +202,14 @@ const sendMessage = async (conversationId, userId, content, userRole = null) => 
       isRead: createdMessage.isRead,
     }
 
+    console.log('🔥 Emitting new_message to room:', `conversation_${conversationId}`)
+    console.log('🔥 socketService.io exists:', !!socketService.io)
+
     // Emit to all users in conversation room
     if (socketService.io) {
       socketService.io.to(`conversation_${conversationId}`).emit('new_message', messageToEmit)
-    }
+      console.log('✅ new_message emitted successfully')
+    } else console.log('❌ socketService.io is not initialized')
 
     // Send notification to offline users
     const recipientId =
