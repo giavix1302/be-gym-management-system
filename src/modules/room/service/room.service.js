@@ -7,20 +7,6 @@ const createRoom = async (data) => {
   try {
     const { locationId, name, capacity } = data
 
-    // Validate location exists (uncomment when location model is available)
-    // const isLocationExist = await locationModel.getDetailById(locationId)
-    // console.log('🚀 ~ createRoom ~ isLocationExist:', isLocationExist)
-    // if (isLocationExist === null) return { success: false, message: 'Location not found' }
-
-    // Check if room name already exists in the same location
-    // const isRoomNameExists = await roomModel.checkRoomNameExists(locationId, name)
-    // if (isRoomNameExists) {
-    //   return {
-    //     success: false,
-    //     message: 'Room name already exists in this location',
-    //   }
-    // }
-
     const dataToSave = {
       locationId,
       name: name.trim(),
@@ -41,7 +27,7 @@ const createRoom = async (data) => {
 
 const getRoomById = async (roomId) => {
   try {
-    const room = await roomModel.getDetailById(roomId)
+    const room = await roomModel.getDetail(roomId)
     console.log('🚀 ~ getRoomById ~ room:', room)
 
     if (room === null) {
@@ -100,7 +86,7 @@ const getAllRooms = async () => {
 const updateRoom = async (roomId, data) => {
   try {
     // Check if room exists
-    const isRoomExist = await roomModel.getDetailById(roomId)
+    const isRoomExist = await roomModel.getDetail(roomId)
     console.log('🚀 ~ updateRoom ~ isRoomExist:', isRoomExist)
     if (isRoomExist === null) return { success: false, message: 'Room not found' }
 
@@ -151,7 +137,7 @@ const updateRoom = async (roomId, data) => {
 const deleteRoom = async (roomId) => {
   try {
     // Check if room exists
-    const isRoomExist = await roomModel.getDetailById(roomId)
+    const isRoomExist = await roomModel.getDetail(roomId)
     console.log('🚀 ~ deleteRoom ~ isRoomExist:', isRoomExist)
     if (isRoomExist === null) return { success: false, message: 'Room not found' }
 
@@ -187,7 +173,7 @@ const deleteRoom = async (roomId) => {
 const softDeleteRoom = async (roomId) => {
   try {
     // Check if room exists
-    const isRoomExist = await roomModel.getDetailById(roomId)
+    const isRoomExist = await roomModel.getDetail(roomId)
     console.log('🚀 ~ softDeleteRoom ~ isRoomExist:', isRoomExist)
     if (isRoomExist === null) return { success: false, message: 'Room not found' }
 
@@ -213,7 +199,7 @@ const softDeleteRoom = async (roomId) => {
 
 const getRoomAvailability = async (roomId, date) => {
   try {
-    const room = await roomModel.getDetailById(roomId)
+    const room = await roomModel.getDetail(roomId)
     if (room === null) return { success: false, message: 'Room not found' }
 
     // TODO: Implement availability check logic

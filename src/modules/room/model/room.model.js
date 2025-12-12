@@ -36,12 +36,12 @@ const createNew = async (data) => {
   }
 }
 
-const getDetail = async (userId) => {
+const getDetail = async (_id) => {
   try {
     const user = GET_DB()
       .collection(ROOM_COLLECTION_NAME)
       .findOne({
-        _id: new ObjectId(String(userId)),
+        _id: new ObjectId(String(_id)),
       })
     return user
   } catch (error) {
@@ -139,6 +139,39 @@ const getListRoomWithClassSessionsByLocationId = async (locationId) => {
   }
 }
 
+const deleteRoom = async (roomId) => {
+  try {
+    // Check if room exists
+    const result = await GET_DB()
+      .collection(ROOM_COLLECTION_NAME)
+      .findOneAndDelete({ _id: new ObjectId(String(roomId)) }, { returnDocument: ReturnDocument.AFTER })
+
+    if (result.value === null) {
+      return null
+    }
+
+    return result.value
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const softDeleteRoom = async (roomId) => {
+  try {
+    const result = await GET_DB()
+      .collection(ROOM_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(String(roomId)) },
+        { $set: { _destroy: true, updatedAt: Date.now() } },
+        { returnDocument: ReturnDocument.AFTER }
+      )
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 // Cập nhật export roomModel
 export const roomModel = {
   ROOM_COLLECTION_NAME,
@@ -147,4 +180,6 @@ export const roomModel = {
   getDetail,
   getAllRooms,
   getListRoomWithClassSessionsByLocationId, // Thêm method chính
+  deleteRoom,
+  softDeleteRoom,
 }
